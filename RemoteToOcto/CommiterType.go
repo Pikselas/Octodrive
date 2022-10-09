@@ -1,6 +1,6 @@
-package GithubAPI
+package RemoteToOcto
 
 type CommiterType struct {
-	Name  string 
+	Name  string
 	Email string
 }

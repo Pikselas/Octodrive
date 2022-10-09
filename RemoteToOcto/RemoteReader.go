@@ -1,4 +1,4 @@
-package GithubAPI
+package RemoteToOcto
 
 import (
 	"bytes"
