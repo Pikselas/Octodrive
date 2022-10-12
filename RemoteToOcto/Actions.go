@@ -28,32 +28,6 @@ func getUserData() (string, string, string, string) {
 	return os.Getenv(user.Token), os.Getenv(user.Mail), user.User, user.Repo
 }
 
-func TransferMultiPart(From string, To string) int {
-	RemoteResp, err := http.Get(From)
-	if err != nil {
-		panic(err)
-	}
-	defer RemoteResp.Body.Close()
-	token, mail, user, repo := getUserData()
-	b := bytes.Buffer{}
-	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	reader := RemoteReader{RemoteResp.Body, enc, &b, true}
-	r := BodyFormater{0, &reader, CommiterType{user, mail}}
-	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+To, user, repo)
-	GithubReq, err := http.NewRequest(http.MethodPut, targetURL, &r)
-	if err != nil {
-		panic(err)
-	}
-	GithubReq.Header.Add("Accept", "application/vnd.github+json")
-	GithubReq.Header.Add("Authorization", "Bearer "+token)
-	GithubResp, err := http.DefaultClient.Do(GithubReq)
-	if err != nil {
-		panic(err)
-	}
-	defer GithubResp.Body.Close()
-	return GithubResp.StatusCode
-}
-
 func TransferWhole(From string, To string) int {
 	RemoteResp, err := http.Get(From)
 	if err != nil {
