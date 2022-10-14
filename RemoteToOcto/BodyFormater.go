@@ -7,7 +7,7 @@ import (
 
 type BodyFormater struct {
 	state    int
-	reader   *RemoteReader
+	reader   io.Reader
 	commiter CommiterType
 }
 
