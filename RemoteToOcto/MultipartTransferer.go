@@ -16,7 +16,8 @@ type MultiPartTransferer interface {
 
 type transferer struct {
 	from      string
-	to        string
+	repo      string
+	path      string
 	encoded   int64
 	total     int64
 	readcount int64
@@ -41,26 +42,14 @@ func (t *transferer) TransferMultiPart() int {
 	}
 	defer RemoteResp.Body.Close()
 	t.total = RemoteResp.ContentLength
-	token, mail, user, repo := getUserData()
+	token, mail, user := getUserData()
 	b := bytes.Buffer{}
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	reader := RemoteReader{RemoteResp.Body, enc, &b, &t.readcount, &t.encoded, 50000000, true}
-	r := BodyFormater{0, &reader, CommiterType{user, mail}}
-	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.to, user, repo)
-	GithubReq, err := http.NewRequest(http.MethodPut, targetURL, &r)
-	if err != nil {
-		panic(err)
-	}
-	GithubReq.Header.Add("Accept", "application/vnd.github+json")
-	GithubReq.Header.Add("Authorization", "Bearer "+token)
-	GithubResp, err := http.DefaultClient.Do(GithubReq)
-	if err != nil {
-		panic(err)
-	}
-	GithubResp.Body.Close()
-	return GithubResp.StatusCode
+	reader := RemoteReader{RemoteResp.Body, enc, &b, &t.readcount, &t.encoded, 50000000, true, false}
+	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.path, user, t.repo)
+	return Transfer(targetURL, token, user, mail, &reader)
 }
 
-func NewMultiPartTransferer(From string, To string) MultiPartTransferer {
-	return &transferer{From, To, 0, 0, 0}
+func NewMultiPartTransferer(From string, Repo string, Path string) MultiPartTransferer {
+	return &transferer{From, Repo, Path, 0, 0, 0}
 }

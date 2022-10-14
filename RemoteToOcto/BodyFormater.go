@@ -11,8 +11,8 @@ import (
 */
 
 /*
-state: represnts formation state (always use 0)
-reader: from where contents can be read and injected in the "content" section of json
+state: represnts formation state (always use 0).
+reader: from where contents can be read and injected in the "content" section of json.
 commiter: author's details
 */
 type BodyFormater struct {

@@ -5,12 +5,11 @@ import (
 )
 
 /*
-   Reads from source -> Encodes by the encoder and returns
-   buffer: should be the reading and writing compatible channel / buffer
-		   where the encoder writes it's data after encoding
-  active_read_state: should be true
+	   Reads from source -> Encodes by the encoder and returns.
+	   buffer: should be the reading and writing compatible channel / buffer.
+			   where the encoder writes it's data after encoding.
+	  active_read_state: should be true.
 */
-
 type RemoteReader struct {
 	source            io.Reader
 	encoder           io.WriteCloser
@@ -19,6 +18,7 @@ type RemoteReader struct {
 	encoding_count    *int64
 	max_read_count    int64
 	active_read_state bool
+	source_ended      bool
 }
 
 func (r *RemoteReader) Read(p []byte) (int, error) {
@@ -30,6 +30,9 @@ func (r *RemoteReader) Read(p []byte) (int, error) {
 		if err == io.EOF || *r.read_count >= r.max_read_count {
 			r.active_read_state = false
 			r.encoder.Close()
+			if err == io.EOF {
+				r.source_ended = true
+			}
 		}
 	}
 	count, err := r.buffer.Read(buff)
