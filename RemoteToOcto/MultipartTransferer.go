@@ -44,7 +44,7 @@ func (t *transferer) TransferMultiPart() int {
 	token, mail, user, repo := getUserData()
 	b := bytes.Buffer{}
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	reader := RemoteReader{RemoteResp.Body, enc, &b, &t.readcount, &t.encoded, true}
+	reader := RemoteReader{RemoteResp.Body, enc, &b, &t.readcount, &t.encoded, 50000000, true}
 	r := BodyFormater{0, &reader, CommiterType{user, mail}}
 	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.to, user, repo)
 	GithubReq, err := http.NewRequest(http.MethodPut, targetURL, &r)
