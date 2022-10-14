@@ -5,6 +5,16 @@ import (
 	"io"
 )
 
+/*
+ Formats giithub-API compatible body based on
+ https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
+*/
+
+/*
+state: represnts formation state (always use 0)
+reader: from where contents can be read and injected in the "content" section of json
+commiter: author's details
+*/
 type BodyFormater struct {
 	state    int
 	reader   io.Reader

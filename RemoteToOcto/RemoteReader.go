@@ -4,10 +4,17 @@ import (
 	"io"
 )
 
+/*
+   Reads from source -> Encodes by the encoder and returns
+   buffer: should be the reading and writing compatible channel / buffer
+		   where the encoder writes it's data after encoding
+  active_read_state: should be true
+*/
+
 type RemoteReader struct {
 	source            io.Reader
 	encoder           io.WriteCloser
-	buffer            io.ReadWriter
+	buffer            io.Reader
 	read_count        *int64
 	encoding_count    *int64
 	max_read_count    int64
