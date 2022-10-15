@@ -15,20 +15,21 @@ type MultiPartTransferer interface {
 }
 
 type transferer struct {
-	from      string
-	repo      string
-	path      string
-	encoded   int64
-	total     int64
-	readcount int64
+	from          string
+	repo          string
+	path          string
+	total         int64
+	encoded       int64
+	readcount     int64
+	active_reader RemoteReader
 }
 
 func (t *transferer) EncodedSize() int64 {
-	return t.encoded
+	return t.encoded + t.active_reader.EncodeCount()
 }
 
 func (t *transferer) ReadCount() int64 {
-	return t.readcount
+	return t.readcount + t.active_reader.ReadCount()
 }
 
 func (t *transferer) RawTransferSize() int64 {
@@ -45,11 +46,11 @@ func (t *transferer) TransferMultiPart() int {
 	token, mail, user := getUserData()
 	b := bytes.Buffer{}
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	reader := RemoteReader{RemoteResp.Body, enc, &b, &t.readcount, &t.encoded, 50000000, true, false}
+	t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, 40000000)
 	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.path, user, t.repo)
-	return Transfer(targetURL, token, user, mail, &reader)
+	return Transfer(targetURL, token, user, mail, t.active_reader)
 }
 
 func NewMultiPartTransferer(From string, Repo string, Path string) MultiPartTransferer {
-	return &transferer{From, Repo, Path, 0, 0, 0}
+	return &transferer{From, Repo, Path, 0, 0, 0, &reader{}}
 }
