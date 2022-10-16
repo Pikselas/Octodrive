@@ -40,10 +40,9 @@ func (r *reader) RemoteSourceEnded() bool {
 }
 
 func (r *reader) Read(p []byte) (int, error) {
-	buff := make([]byte, 1000)
 	if r.active_read_state {
-		count, err := r.source.Read(buff)
-		r.encoder.Write(buff[:count])
+		count, err := r.source.Read(p)
+		r.encoder.Write(p[:count])
 		r.read_count += int64(count)
 		if err == io.EOF || r.read_count >= r.max_read_count {
 			r.active_read_state = false
@@ -53,9 +52,8 @@ func (r *reader) Read(p []byte) (int, error) {
 			}
 		}
 	}
-	count, err := r.buffer.Read(buff)
+	count, err := r.buffer.Read(p)
 	r.encoding_count += int64(count)
-	copy(p, buff[:count])
 	return count, err
 }
 
@@ -63,10 +61,10 @@ func (r *reader) Read(p []byte) (int, error) {
 	Source: source from data should be retrieved.
 	Encoder: that encodes the data into a special format.
 	EncodedSource: a buffer or pipe(non blocking) where encoder writes the data after encoding.
-	MaxReadCount: limit for reading from a source (could be read almost nearly the max (can be greater than max by 10-1000 bytes)). 
+	MaxReadCount: limit for reading from a source (could be read almost nearly the max (can be greater than max by 10-1000 bytes)).
 
-	It should be safe to set "MaxReadCount" lower (atleast 500 bytes less) than the actual max amount needed 
-*/ 
+	It should be safe to set "MaxReadCount" lower (atleast 500 bytes less) than the actual max amount needed
+*/
 
 func NewRemoteReader(Source io.Reader, Encoder io.WriteCloser, EncodedSource io.Reader, MaxReadCount int64) RemoteReader {
 	return &reader{Source, Encoder, EncodedSource, 0, 0, MaxReadCount, true, false}
