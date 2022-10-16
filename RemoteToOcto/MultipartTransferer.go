@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 type MultiPartTransferer interface {
@@ -44,11 +45,18 @@ func (t *transferer) TransferMultiPart() int {
 	defer RemoteResp.Body.Close()
 	t.total = RemoteResp.ContentLength
 	token, mail, user := getUserData()
-	b := bytes.Buffer{}
-	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, 40000000)
-	targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.path, user, t.repo)
-	return Transfer(targetURL, token, user, mail, t.active_reader)
+	count := 0
+	for !t.active_reader.RemoteSourceEnded() {
+		b := bytes.Buffer{}
+		enc := base64.NewEncoder(base64.StdEncoding, &b)
+		t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, 20000000)
+		targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.path+"/"+strconv.Itoa(count), user, t.repo)
+		Transfer(targetURL, token, user, mail, t.active_reader)
+		t.readcount += t.active_reader.ReadCount()
+		t.encoded += t.active_reader.EncodeCount()
+		count++
+	}
+	return 1
 }
 
 func NewMultiPartTransferer(From string, Repo string, Path string) MultiPartTransferer {
