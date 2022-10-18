@@ -49,9 +49,14 @@ func (t *transferer) TransferMultiPart() int {
 	for !t.active_reader.RemoteSourceEnded() {
 		b := bytes.Buffer{}
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
-		t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, 20000000)
+		t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, 40000000)
 		targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+t.path+"/"+strconv.Itoa(count), user, t.repo)
-		Transfer(targetURL, token, user, mail, t.active_reader)
+		cacheR := NewCachedReader(t.active_reader)
+		for Transfer(targetURL, token, user, mail, cacheR) != 201 {
+			fmt.Println("Cache Reading")
+			cacheR.ResetReadingState()
+		}
+		cacheR.Dispose()
 		t.readcount += t.active_reader.ReadCount()
 		t.encoded += t.active_reader.EncodeCount()
 		count++
