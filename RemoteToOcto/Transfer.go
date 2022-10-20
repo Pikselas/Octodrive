@@ -5,8 +5,8 @@ import (
 	"net/http"
 )
 
-func Transfer(target string, token string, user string, mail string, body io.Reader) int {
-	bodyformater := BodyFormater{0, body, CommiterType{user, mail}}
+func Transfer(target string, token string, commiter CommiterType, body io.Reader) int {
+	bodyformater := BodyFormater{0, body, commiter}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &bodyformater)
 	if err != nil {
 		panic(err)
