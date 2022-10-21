@@ -4,25 +4,27 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"net/http"
+	"io"
 	"strconv"
 )
 
 type MultiPartTransferer interface {
 	EncodedSize() int64
 	ReadCount() int64
-	RawTransferSize() int64
-	TransferMultiPart(From string, Repo string, Path string) int
+	TransferPart() (int, string, error)
 }
 
 type transferer struct {
-	token         string
-	total         int64
-	encoded       int64
-	readcount     int64
-	chunksize     int64
-	commiter      CommiterType
-	active_reader RemoteReader
+	token               string
+	baseurl             string
+	encoded             int64
+	readcount           int64
+	chunksize           int64
+	chunk_count         uint
+	commiter            CommiterType
+	source              io.Reader
+	active_reader       RemoteReader
+	active_cache_reader CachedReader
 }
 
 func (t *transferer) EncodedSize() int64 {
@@ -33,36 +35,37 @@ func (t *transferer) ReadCount() int64 {
 	return t.readcount + t.active_reader.ReadCount()
 }
 
-func (t *transferer) RawTransferSize() int64 {
-	return t.total
-}
+func (t *transferer) TransferPart() (int, string, error) {
 
-func (t *transferer) TransferMultiPart(From string, Repo string, Path string) int {
-	RemoteResp, err := http.Get(From)
-	if err != nil {
-		panic(err)
+	targetURL := t.baseurl + "/" + strconv.Itoa(int(t.chunk_count))
+
+	if t.active_cache_reader.IsCached() {
+		stat, resp := Transfer(targetURL, t.token, t.commiter, t.active_cache_reader)
+		if stat == 201 {
+			t.active_cache_reader.Dispose()
+		}
+		return stat, resp, nil
 	}
-	defer RemoteResp.Body.Close()
-	t.total = RemoteResp.ContentLength
-	count := 0
-	for !t.active_reader.RemoteSourceEnded() {
+	if !t.active_reader.RemoteSourceEnded() {
 		b := bytes.Buffer{}
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
-		t.active_reader = NewRemoteReader(RemoteResp.Body, enc, &b, t.chunksize)
-		targetURL := fmt.Sprintf(FILE_UPLOAD_URL+"/"+Path+"/"+strconv.Itoa(count), t.commiter.Name, Repo)
-		cacheR := NewCachedReader(t.active_reader)
-		for Transfer(targetURL, t.token, t.commiter, cacheR) != 201 {
-			fmt.Println("Cache Reading")
-			cacheR.ResetReadingState()
+		t.active_reader = NewRemoteReader(t.source, enc, &b, t.chunksize)
+		t.active_cache_reader = NewCachedReader(t.active_reader)
+		stat, resp := Transfer(targetURL, t.token, t.commiter, t.active_cache_reader)
+		if stat != 201 {
+			t.active_cache_reader.ResetReadingState()
+		} else {
+			t.active_cache_reader.Dispose()
 		}
-		cacheR.Dispose()
 		t.readcount += t.active_reader.ReadCount()
 		t.encoded += t.active_reader.EncodeCount()
-		count++
+		t.chunk_count++
+		return stat, resp, nil
 	}
-	return 1
+	return 0, "", io.EOF
 }
 
-func NewMultiPartTransferer(Commiter CommiterType, Token string) MultiPartTransferer {
-	return &transferer{Token, 0, 0, 0, 30000000,Commiter,&reader{}}
+func NewMultiPartTransferer(Commiter CommiterType, RepoUser string, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
+	url := fmt.Sprintf(FILE_UPLOAD_URL+"/"+Path, RepoUser, Repo)
+	return &transferer{Token, url, 0, 0, 30000000, 0, Commiter, Source, &reader{}, &cachedReader{}}
 }

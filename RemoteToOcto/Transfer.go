@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func Transfer(target string, token string, commiter CommiterType, body io.Reader) int {
+func Transfer(target string, token string, commiter CommiterType, body io.Reader) (int, string) {
 	bodyformater := BodyFormater{0, body, commiter}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &bodyformater)
 	if err != nil {
@@ -17,6 +17,7 @@ func Transfer(target string, token string, commiter CommiterType, body io.Reader
 	if err != nil {
 		panic(err)
 	}
-	GithubResp.Body.Close()
-	return GithubResp.StatusCode
+	defer GithubResp.Body.Close()
+	resp, _ := io.ReadAll(GithubResp.Body)
+	return GithubResp.StatusCode, string(resp)
 }
