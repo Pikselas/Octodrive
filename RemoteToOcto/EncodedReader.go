@@ -10,18 +10,16 @@ import (
 			   where the encoder writes it's data after encoding.
 	   active_read_state: should be true.
 */
-type RemoteReader interface {
+type EncodedReader interface {
 	Read(p []byte) (int, error)
 	ReadCount() int64
-	EncodeCount() int64
-	RemoteSourceEnded() bool
+	SourceEnded() bool
 }
 type reader struct {
 	source            io.Reader
 	encoder           io.WriteCloser
 	buffer            io.Reader
 	read_count        int64
-	encoding_count    int64
 	max_read_count    int64
 	active_read_state bool
 	source_ended      bool
@@ -31,11 +29,7 @@ func (r *reader) ReadCount() int64 {
 	return r.read_count
 }
 
-func (r *reader) EncodeCount() int64 {
-	return r.encoding_count
-}
-
-func (r *reader) RemoteSourceEnded() bool {
+func (r *reader) SourceEnded() bool {
 	return r.source_ended
 }
 
@@ -52,9 +46,7 @@ func (r *reader) Read(p []byte) (int, error) {
 			}
 		}
 	}
-	count, err := r.buffer.Read(p)
-	r.encoding_count += int64(count)
-	return count, err
+	return r.buffer.Read(p)
 }
 
 /*
@@ -66,6 +58,6 @@ func (r *reader) Read(p []byte) (int, error) {
 	It should be safe to set "MaxReadCount" lower (atleast 500 bytes less) than the actual max amount needed
 */
 
-func NewRemoteReader(Source io.Reader, Encoder io.WriteCloser, EncodedSource io.Reader, MaxReadCount int64) RemoteReader {
-	return &reader{Source, Encoder, EncodedSource, 0, 0, MaxReadCount, true, false}
+func NewEncodedReader(Source io.Reader, Encoder io.WriteCloser, EncodedSource io.Reader, MaxReadCount int64) EncodedReader {
+	return &reader{Source, Encoder, EncodedSource, 0, MaxReadCount, true, false}
 }

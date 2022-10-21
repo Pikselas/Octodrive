@@ -14,6 +14,7 @@ Read: implements the io.Reader interface.
 */
 type CachedReader interface {
 	Dispose()
+	ReadCount() int64
 	IsCached() bool
 	ResetReadingState()
 	Read(p []byte) (int, error)
@@ -21,6 +22,7 @@ type CachedReader interface {
 
 type cachedReader struct {
 	cached              bool
+	read_count          int64
 	temp_data_name      string
 	current_data_source io.Reader
 	place_to_write      io.WriteCloser
@@ -37,8 +39,13 @@ func (cr *cachedReader) IsCached() bool {
 	return cr.cached
 }
 
+func (cr *cachedReader) ReadCount() int64 {
+	return cr.read_count
+}
+
 func (cr *cachedReader) ResetReadingState() {
 	if cr.IsCached() {
+		cr.read_count = 0
 		cr.current_data_source, _ = os.Open(cr.temp_data_name)
 	}
 }
@@ -64,5 +71,5 @@ func NewCachedReader(reader io.Reader) CachedReader {
 	}
 	rand_str := string(rand_byte)
 	file, _ := os.Create(rand_str)
-	return &cachedReader{false, rand_str, reader, file}
+	return &cachedReader{false, 0, rand_str, reader, file}
 }
