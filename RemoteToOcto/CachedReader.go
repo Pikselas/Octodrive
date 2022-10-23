@@ -59,6 +59,7 @@ func (cr *cachedReader) Read(p []byte) (int, error) {
 			cr.cached = true
 		}
 	}
+	cr.read_count += int64(count)
 	return count, err
 }
 

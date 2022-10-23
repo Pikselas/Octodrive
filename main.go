@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -16,12 +17,25 @@ func main() {
 	defer src.Body.Close()
 	tra := RemoteToOcto.NewOctoUser("Pikselas",
 		os.Getenv("OCTODRIVE_MAIL"),
-		os.Getenv("OCTODRIVE_TOKEN")).NewMultiPartTransferer("Pikselas", "CopyPaster", "Temp", src.Body)
+		os.Getenv("OCTODRIVE_TOKEN")).NewMultiPartTransferer("Pikselas", "CopyPaster", "Octo.jpg", src.Body)
+
+	st := make([]int, 0)
+	go func(arr *[]int, tr *RemoteToOcto.MultiPartTransferer) {
+		len := src.ContentLength
+		for {
+			fmt.Print("\033[H\033[2J")
+			fmt.Println(len, (*tr).ReadCount())
+			for _, v := range *arr {
+				fmt.Println(v)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}(&st, &tra)
 	for {
 		stat, _, err := tra.TransferPart()
-		if err == io.EOF {
+		st = append(st, stat)
+		if err == io.EOF || (stat != 201 && stat != 502) {
 			break
 		}
-		fmt.Println(stat)
 	}
 }

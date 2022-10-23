@@ -22,11 +22,10 @@ type transferer struct {
 	source              io.Reader
 	active_reader       EncodedReader
 	active_cache_reader CachedReader
-	status_provider     readStatusProvider
 }
 
 func (t *transferer) ReadCount() int64 {
-	return t.readcount + t.status_provider.ReadCount()
+	return t.readcount + t.active_cache_reader.ReadCount()
 }
 
 func (t *transferer) TransferPart() (int, string, error) {
@@ -53,7 +52,7 @@ func (t *transferer) TransferPart() (int, string, error) {
 		} else {
 			t.active_cache_reader.Dispose()
 		}
-		t.readcount += t.status_provider.ReadCount()
+		t.readcount += t.active_reader.ReadCount()
 		t.chunk_count++
 		return stat, resp, nil
 	}
@@ -63,5 +62,5 @@ func (t *transferer) TransferPart() (int, string, error) {
 func NewMultiPartTransferer(Commiter CommiterType, RepoUser string, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
 	url := fmt.Sprintf(FILE_UPLOAD_URL+"/"+Path, RepoUser, Repo)
 	reader := reader{}
-	return &transferer{Token, url, 0, 30000000, 0, Commiter, Source, &reader, &cachedReader{}, &reader}
+	return &transferer{Token, url, 0, 30000000, 0, Commiter, Source, &reader, &cachedReader{}}
 }
