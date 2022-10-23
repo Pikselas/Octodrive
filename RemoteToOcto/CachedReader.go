@@ -26,10 +26,14 @@ type cachedReader struct {
 	temp_data_name      string
 	current_data_source io.Reader
 	place_to_write      io.WriteCloser
+	file_closer         io.Closer
 }
 
 func (cr *cachedReader) Dispose() {
 	if cr.IsCached() {
+		if cr.file_closer != nil {
+			cr.file_closer.Close()
+		}
 		os.Remove(cr.temp_data_name)
 		cr.cached = false
 	}
@@ -45,8 +49,13 @@ func (cr *cachedReader) ReadCount() int64 {
 
 func (cr *cachedReader) ResetReadingState() {
 	if cr.IsCached() {
+		if cr.file_closer != nil {
+			cr.file_closer.Close()
+		}
 		cr.read_count = 0
-		cr.current_data_source, _ = os.Open(cr.temp_data_name)
+		f, _ := os.Open(cr.temp_data_name)
+		cr.current_data_source = f
+		cr.file_closer = f
 	}
 }
 
@@ -72,5 +81,5 @@ func NewCachedReader(reader io.Reader) CachedReader {
 	}
 	rand_str := string(rand_byte)
 	file, _ := os.Create(rand_str)
-	return &cachedReader{false, 0, rand_str, reader, file}
+	return &cachedReader{false, 0, rand_str, reader, file, nil}
 }
