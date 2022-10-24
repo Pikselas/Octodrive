@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 )
 
@@ -18,6 +19,7 @@ type transferer struct {
 	readcount           int64
 	chunksize           int64
 	chunk_count         uint
+	client              http.Client
 	commiter            CommiterType
 	source              io.Reader
 	active_reader       EncodedReader
@@ -33,7 +35,7 @@ func (t *transferer) TransferPart() (int, string, error) {
 	targetURL := t.baseurl + "/" + strconv.Itoa(int(t.chunk_count))
 
 	if t.active_cache_reader.IsCached() {
-		stat, resp := Transfer(targetURL, t.token, t.commiter, t.active_cache_reader)
+		stat, resp := Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
 		if stat == 201 {
 			t.active_cache_reader.Dispose()
 		} else {
@@ -46,7 +48,7 @@ func (t *transferer) TransferPart() (int, string, error) {
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
 		t.active_reader = NewEncodedReader(t.source, enc, &b, t.chunksize)
 		t.active_cache_reader = NewCachedReader(t.active_reader)
-		stat, resp := Transfer(targetURL, t.token, t.commiter, t.active_cache_reader)
+		stat, resp := Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
 		if stat != 201 {
 			t.active_cache_reader.ResetReadingState()
 		} else {
@@ -62,5 +64,7 @@ func (t *transferer) TransferPart() (int, string, error) {
 func NewMultiPartTransferer(Commiter CommiterType, RepoUser string, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
 	url := fmt.Sprintf(FILE_UPLOAD_URL+"/"+Path, RepoUser, Repo)
 	reader := reader{}
-	return &transferer{Token, url, 0, 30000000, 0, Commiter, Source, &reader, &cachedReader{}}
+	tra := http.Transport{}
+	client := http.Client{Transport: &tra}
+	return &transferer{Token, url, 0, 30000000, 0, client, Commiter, Source, &reader, &cachedReader{}}
 }
