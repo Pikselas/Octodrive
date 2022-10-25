@@ -30,33 +30,33 @@ func (t *transferer) ReadCount() int64 {
 	return t.readcount + t.active_cache_reader.ReadCount()
 }
 
-func (t *transferer) TransferPart() (int, string, error) {
+func (t *transferer) TransferPart() (status_code int, resp_string string, err error) {
 
 	targetURL := t.baseurl + "/" + strconv.Itoa(int(t.chunk_count))
 
 	if t.active_cache_reader.IsCached() {
-		stat, resp := Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
-		if stat == 201 {
+		status_code, resp_string, err = Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
+		if status_code == 201 {
 			t.active_cache_reader.Dispose()
 		} else {
 			t.active_cache_reader.ResetReadingState()
 		}
-		return stat, resp, nil
+		return
 	}
 	if !t.active_reader.SourceEnded() {
 		b := bytes.Buffer{}
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
 		t.active_reader = NewEncodedReader(t.source, enc, &b, t.chunksize)
 		t.active_cache_reader = NewCachedReader(t.active_reader)
-		stat, resp := Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
-		if stat != 201 {
+		status_code, resp_string, err = Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
+		if status_code != 201 {
 			t.active_cache_reader.ResetReadingState()
 		} else {
 			t.active_cache_reader.Dispose()
 		}
 		t.readcount += t.active_reader.ReadCount()
 		t.chunk_count++
-		return stat, resp, nil
+		return
 	}
 	return 0, "", io.EOF
 }

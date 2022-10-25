@@ -5,19 +5,19 @@ import (
 	"net/http"
 )
 
-func Transfer(client *http.Client, target string, token string, commiter CommiterType, body io.Reader) (int, string) {
+func Transfer(client *http.Client, target string, token string, commiter CommiterType, body io.Reader) (resp_code int,resp_string string, err error) {
 	bodyformater := BodyFormater{0, body, commiter}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &bodyformater)
 	if err != nil {
-		panic(err)
+		return
 	}
 	GithubReq.Header.Add("Accept", "application/vnd.github+json")
 	GithubReq.Header.Add("Authorization", "Bearer "+token)
 	GithubResp, err := client.Do(GithubReq)
 	if err != nil {
-		panic(err)
+		return
 	}
 	defer GithubResp.Body.Close()
-	resp, _ := io.ReadAll(GithubResp.Body)
-	return GithubResp.StatusCode, string(resp)
+	resp_byte, err := io.ReadAll(GithubResp.Body)
+	return GithubResp.StatusCode, string(resp_byte) , err
 }
