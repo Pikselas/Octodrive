@@ -1,4 +1,4 @@
-package RemoteToOcto
+package ToOcto
 
 import (
 	"fmt"

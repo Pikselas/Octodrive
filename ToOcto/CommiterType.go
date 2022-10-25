@@ -1,4 +1,4 @@
-package RemoteToOcto
+package ToOcto
 
 type CommiterType struct {
 	Name  string

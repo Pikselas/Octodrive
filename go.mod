@@ -1,3 +1,3 @@
-module RemoteToOcto
+module ToOcto
 
 go 1.19

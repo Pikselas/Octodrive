@@ -1,7 +1,7 @@
 package main
 
 import (
-	"RemoteToOcto/RemoteToOcto"
+	"ToOcto/ToOcto"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,12 +15,12 @@ func main() {
 		panic(err)
 	}
 	defer src.Body.Close()
-	tra := RemoteToOcto.NewOctoUser("Pikselas",
+	tra := ToOcto.NewOctoUser("Pikselas",
 		os.Getenv("OCTODRIVE_MAIL"),
 		os.Getenv("OCTODRIVE_TOKEN")).NewMultiPartTransferer("Pikselas", "CopyPaster", "Octo.jpg", src.Body)
 
 	st := make([]int, 0)
-	go func(arr *[]int, tr *RemoteToOcto.MultiPartTransferer) {
+	go func(arr *[]int, tr *ToOcto.MultiPartTransferer) {
 		len := src.ContentLength
 		for {
 			fmt.Print("\033[H\033[2J")

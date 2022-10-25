@@ -1,11 +1,11 @@
-package RemoteToOcto
+package ToOcto
 
 import (
 	"io"
 	"net/http"
 )
 
-func Transfer(client *http.Client, target string, token string, commiter CommiterType, body io.Reader) (resp_code int,resp_string string, err error) {
+func Transfer(client *http.Client, target string, token string, commiter CommiterType, body io.Reader) (resp_code int, resp_string string, err error) {
 	bodyformater := BodyFormater{0, body, commiter}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &bodyformater)
 	if err != nil {
@@ -19,5 +19,5 @@ func Transfer(client *http.Client, target string, token string, commiter Commite
 	}
 	defer GithubResp.Body.Close()
 	resp_byte, err := io.ReadAll(GithubResp.Body)
-	return GithubResp.StatusCode, string(resp_byte) , err
+	return GithubResp.StatusCode, string(resp_byte), err
 }
