@@ -26,7 +26,7 @@ func (r *reader) GetReadCount() int64 {
 }
 
 func (r *reader) Read(p []byte) (n int, err error) {
-	if r.current_count > r.max_count {
+	if r.current_count >= r.max_count {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
