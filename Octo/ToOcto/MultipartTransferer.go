@@ -26,7 +26,7 @@ type transferer struct {
 }
 
 func (t *transferer) ReadCount() int64 {
-	return t.readcount + t.active_cache_reader.ReadCount()
+	return t.readcount + t.active_reader.ReadCount()
 }
 
 func (t *transferer) TransferPart() (status_code int, resp_string string, err error) {
