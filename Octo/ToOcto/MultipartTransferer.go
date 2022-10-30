@@ -18,6 +18,7 @@ type transferer struct {
 	readcount           int64
 	chunksize           int64
 	chunk_count         uint
+	targetURL           string
 	client              http.Client
 	commiter            CommiterType
 	source              io.Reader
@@ -31,10 +32,8 @@ func (t *transferer) ReadCount() int64 {
 
 func (t *transferer) TransferPart() (status_code int, resp_string string, err error) {
 
-	targetURL := t.baseurl + "/" + strconv.Itoa(int(t.chunk_count))
-
 	if t.active_cache_reader.IsCached() {
-		status_code, resp_string, err = Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
+		status_code, resp_string, err = Transfer(&t.client, t.targetURL, t.token, t.commiter, t.active_cache_reader)
 		if status_code == 201 {
 			t.active_cache_reader.Dispose()
 		} else {
@@ -43,11 +42,12 @@ func (t *transferer) TransferPart() (status_code int, resp_string string, err er
 		return
 	}
 	if !t.active_reader.SourceEnded() {
+		t.targetURL = t.baseurl + "/" + strconv.Itoa(int(t.chunk_count))
 		b := bytes.Buffer{}
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
 		t.active_reader = NewEncodedReader(t.source, enc, &b, t.chunksize)
 		t.active_cache_reader = NewCachedReader(t.active_reader)
-		status_code, resp_string, err = Transfer(&t.client, targetURL, t.token, t.commiter, t.active_cache_reader)
+		status_code, resp_string, err = Transfer(&t.client, t.targetURL, t.token, t.commiter, t.active_cache_reader)
 		if status_code != 201 {
 			t.active_cache_reader.ResetReadingState()
 		} else {
@@ -61,8 +61,13 @@ func (t *transferer) TransferPart() (status_code int, resp_string string, err er
 }
 
 func NewMultiPartTransferer(Commiter CommiterType, RepoUser string, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
-	reader := reader{}
-	tra := http.Transport{}
-	client := http.Client{Transport: &tra}
-	return &transferer{Token, GetOctoURL(RepoUser, Repo, Path), 0, 30000000, 0, client, Commiter, Source, &reader, &cachedReader{}}
+	return &transferer{
+		token:               Token,
+		baseurl:             GetOctoURL(RepoUser, Repo, Path),
+		chunksize:           30000000,
+		commiter:            Commiter,
+		source:              Source,
+		active_reader:       &reader{},
+		active_cache_reader: &cachedReader{},
+	}
 }
