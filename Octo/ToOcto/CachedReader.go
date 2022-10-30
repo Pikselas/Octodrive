@@ -73,7 +73,7 @@ func (cr *cachedReader) Read(p []byte) (int, error) {
 }
 
 func NewCachedReader(reader io.Reader) CachedReader {
-	const s = "ABCDEFGHIJKLMabcdefghijklm"
+	const s = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz123456789"
 	rand.Seed(time.Now().UnixNano())
 	rand_byte := make([]byte, 5)
 	for i := range rand_byte {

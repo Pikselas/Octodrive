@@ -3,7 +3,6 @@ package ToOcto
 import (
 	"bytes"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -62,9 +61,8 @@ func (t *transferer) TransferPart() (status_code int, resp_string string, err er
 }
 
 func NewMultiPartTransferer(Commiter CommiterType, RepoUser string, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
-	url := fmt.Sprintf(FILE_UPLOAD_URL+"/"+Path, RepoUser, Repo)
 	reader := reader{}
 	tra := http.Transport{}
 	client := http.Client{Transport: &tra}
-	return &transferer{Token, url, 0, 30000000, 0, client, Commiter, Source, &reader, &cachedReader{}}
+	return &transferer{Token, GetOctoURL(RepoUser, Repo, Path), 0, 30000000, 0, client, Commiter, Source, &reader, &cachedReader{}}
 }

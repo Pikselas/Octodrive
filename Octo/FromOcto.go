@@ -1,4 +1,4 @@
-package main
+package Octo
 
 import (
 	"io"
@@ -13,6 +13,7 @@ type OctoMultiPartReader interface {
 
 type reader struct {
 	from           string
+	token          string
 	max_count      int
 	current_count  int
 	read_count     int64
@@ -29,11 +30,17 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
-		rq, err := r.client.Get(r.from + "/" + strconv.Itoa(r.current_count))
+		req, err := http.NewRequest(http.MethodGet, r.from+"/"+strconv.Itoa(r.current_count), nil)
+		if err != nil {
+			return 0, err
+		}
+		req.Header.Add("Accept", "application/vnd.github.v3.raw")
+		req.Header.Add("Authorization", "Bearer "+r.token)
+		res, err := r.client.Do(req)
 		if err != nil {
 			panic(err)
 		}
-		r.current_source = rq.Body
+		r.current_source = res.Body
 	}
 	n, err = r.current_source.Read(p)
 	if err == io.EOF {
@@ -48,9 +55,10 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func NewOctoMultipartReader(from string, part_count int) OctoMultiPartReader {
+func NewMultipartReader(from string, part_count int, token string) OctoMultiPartReader {
 	return &reader{
 		from:      from,
 		max_count: part_count,
+		token:     token,
 	}
 }
