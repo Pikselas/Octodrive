@@ -1,6 +1,7 @@
 package Octo
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -30,6 +31,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
+		fmt.Println(r.current_count)
 		req, err := http.NewRequest(http.MethodGet, r.from+"/"+strconv.Itoa(r.current_count), nil)
 		if err != nil {
 			return 0, err
@@ -51,6 +53,9 @@ func (r *reader) Read(p []byte) (n int, err error) {
 			return n, nil
 		}
 		return r.Read(p)
+	} else if err != nil {
+		r.current_source = nil
+		return n, err
 	}
 	return
 }
