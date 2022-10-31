@@ -13,13 +13,14 @@ type OctoMultiPartReader interface {
 }
 
 type reader struct {
-	from           string
-	token          string
-	max_count      int
-	current_count  int
-	read_count     int64
-	client         http.Client
-	current_source io.ReadCloser
+	from               string
+	token              string
+	max_count          int
+	current_count      int
+	current_read_count int
+	read_count         int64
+	client             http.Client
+	current_source     io.ReadCloser
 }
 
 func (r *reader) GetReadCount() int64 {
@@ -31,31 +32,36 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
-		fmt.Println(r.current_count)
 		req, err := http.NewRequest(http.MethodGet, r.from+"/"+strconv.Itoa(r.current_count), nil)
 		if err != nil {
 			return 0, err
 		}
 		req.Header.Add("Accept", "application/vnd.github.v3.raw")
 		req.Header.Add("Authorization", "Bearer "+r.token)
+		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", r.current_read_count))
 		res, err := r.client.Do(req)
 		if err != nil {
 			panic(err)
 		}
+		fmt.Println(res.Status)
 		r.current_source = res.Body
 	}
 	n, err = r.current_source.Read(p)
+	r.current_read_count += n
 	if err == io.EOF {
 		r.current_source.Close()
 		r.current_count++
+		r.current_read_count = 0
 		r.current_source = nil
 		if n > 0 {
 			return n, nil
 		}
-		return r.Read(p)
+		n, err = r.Read(p)
+		r.current_read_count = n
+		return
 	} else if err != nil {
 		r.current_source = nil
-		return n, err
+		return
 	}
 	return
 }
