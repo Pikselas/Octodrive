@@ -14,11 +14,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	ok, err := f.GotoDirectory("Lillian.mp4")
+	for _, v := range f.GetItemList() {
+		println(v.Name, v.IsDir)
+	}
+	err = f.GotoDirectory("Lillian.mp4")
 	if err != nil {
 		panic(err)
 	}
-	if !ok {
-		panic("no such directory")
+	for _, v := range f.GetItemList() {
+		println(v.Name, v.IsDir)
 	}
 }
