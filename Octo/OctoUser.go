@@ -3,6 +3,7 @@ package Octo
 import (
 	"Octo/Octo/ToOcto"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +38,12 @@ func (u *user) createRepository(name string, description string) (int, error) {
 	return res.StatusCode, nil
 }
 
+func (u *user) CreateFile(path string) error {
+
+	//path = ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles/Folders", path)
+	return nil
+}
+
 func (u *user) NewMultiPartTransferer(RepoUser string, Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer {
 	return ToOcto.NewMultiPartTransferer(u.commiter, RepoUser, Repo, Path, u.token, Source)
 }
@@ -58,6 +65,24 @@ func (u *user) NewMultipartReader(RepoUser string, Repo string, Path string) (Oc
 
 func NewOctoUser(User string, Mail string, Token string) (OctoUser, error) {
 	U := user{Token, ToOcto.CommiterType{Name: User, Email: Mail}}
-	_, err := U.createRepository("_Octofiles", "Initial repo for OctoDrive contents")
+	staus, err := U.createRepository("_Octofiles", "Initial repo for OctoDrive contents")
+	if err != nil {
+		return nil, err
+	}
+	if staus == 201 {
+		buf := bytes.NewBuffer([]byte(`{"name": null, "used": 0}`))
+		b := bytes.Buffer{}
+		enc := base64.NewEncoder(base64.StdEncoding, &b)
+		encreadr := ToOcto.NewEncodedReader(buf, enc, &b, 100)
+		resp, s, err := ToOcto.Transfer(http.DefaultClient, ToOcto.GetOctoURL(User, "_Octofiles", "LastRepo.json"), Token, U.commiter, encreadr)
+		if err != nil {
+			return nil, err
+		}
+		if resp != 201 {
+			println(resp)
+			println(s)
+			return nil, fmt.Errorf("error creating LastRepo.json")
+		}
+	}
 	return &U, err
 }
