@@ -11,13 +11,24 @@ import (
 )
 
 type OctoUser interface {
-	NewMultiPartTransferer(RepoUser string, Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer
+	CreateFile(path string, source io.Reader) error
+	NewMultiPartTransferer(Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer
 	NewMultipartReader(RepoUser string, Repo string, Path string) (OctoMultiPartReader, error)
 }
 
 type user struct {
 	token    string
 	commiter ToOcto.CommiterType
+}
+
+func (u *user) makeRequest(method string, repo string, path string, body io.Reader) (*http.Response, error) {
+	rq, err := http.NewRequest(method, ToOcto.GetOctoURL(u.commiter.Name, repo, path), body)
+	if err != nil {
+		return nil, err
+	}
+	rq.Header.Add("Authorization", "token "+u.token)
+	rq.Header.Add("Accept", "application/vnd.github.v3.raw")
+	return http.DefaultClient.Do(rq)
 }
 
 func (u *user) createRepository(name string, description string) (int, error) {
@@ -40,17 +51,49 @@ func (u *user) createRepository(name string, description string) (int, error) {
 
 func (u *user) CreateFile(path string, source io.Reader) error {
 	//get the last repository use
-	//calculate useable space left
-	//if the repository does not exist, create it
+	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "LastRepo.json", nil)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("error getting last repository: %s", res.Status)
+	}
+	var lastRepo struct {
+		Repo  *string `field:"name"`
+		Usage int64   `field:"used"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&lastRepo)
+	if err != nil {
+		return err
+	}
+	//make a new repository if it does not exists or if the last one is full
+	if lastRepo.Repo == nil || lastRepo.Usage > 1000000000 {
+		lastRepo.Repo = new(string)
+		*lastRepo.Repo = RandomString(10)
+		lastRepo.Usage = 0
+		status, err := u.createRepository(*lastRepo.Repo, "Repository for OctoDrive contents")
+		if err != nil {
+			return err
+		}
+		if status != http.StatusCreated {
+			return fmt.Errorf("error creating repository: %s", res.Status)
+		}
+	}
 	//create a multipart transferer with source limiter for max repository size
+	reader := SourceLimiter{Source: source, MaxSize: 1000000000 - lastRepo.Usage}
+	for !reader.IsEOF() {
+		//create a new multipart transferer
+		//transferer := u.NewMultiPartTransferer(*lastRepo.Repo, path, &reader)
+	}
 	//transfer the file
 	//if the file is too big, create a new repository and transfer the file
 	//path = ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles/Folders", path)
 	return nil
 }
 
-func (u *user) NewMultiPartTransferer(RepoUser string, Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer {
-	return ToOcto.NewMultiPartTransferer(u.commiter, RepoUser, Repo, Path, u.token, Source)
+func (u *user) NewMultiPartTransferer(Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer {
+	return ToOcto.NewMultiPartTransferer(u.commiter, Repo, Path, u.token, Source)
 }
 
 func (u *user) NewMultipartReader(RepoUser string, Repo string, Path string) (OctoMultiPartReader, error) {
