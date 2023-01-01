@@ -38,8 +38,13 @@ func (u *user) createRepository(name string, description string) (int, error) {
 	return res.StatusCode, nil
 }
 
-func (u *user) CreateFile(path string) error {
-
+func (u *user) CreateFile(path string, source io.Reader) error {
+	//get the last repository use
+	//calculate useable space left
+	//if the repository does not exist, create it
+	//create a multipart transferer with source limiter for max repository size
+	//transfer the file
+	//if the file is too big, create a new repository and transfer the file
 	//path = ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles/Folders", path)
 	return nil
 }
@@ -74,13 +79,11 @@ func NewOctoUser(User string, Mail string, Token string) (OctoUser, error) {
 		b := bytes.Buffer{}
 		enc := base64.NewEncoder(base64.StdEncoding, &b)
 		encreadr := ToOcto.NewEncodedReader(buf, enc, &b, 100)
-		resp, s, err := ToOcto.Transfer(http.DefaultClient, ToOcto.GetOctoURL(User, "_Octofiles", "LastRepo.json"), Token, U.commiter, encreadr)
+		resp, _, err := ToOcto.Transfer(http.DefaultClient, ToOcto.GetOctoURL(User, "_Octofiles", "LastRepo.json"), Token, U.commiter, encreadr)
 		if err != nil {
 			return nil, err
 		}
 		if resp != 201 {
-			println(resp)
-			println(s)
 			return nil, fmt.Errorf("error creating LastRepo.json")
 		}
 	}

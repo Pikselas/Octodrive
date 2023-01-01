@@ -21,7 +21,7 @@ type FileNavigator interface {
 	GetItemList() []ItemType
 }
 
-var InvalidPath = errors.New("path not found")
+var ErrorInvalidPath = errors.New("path not found")
 
 type fileNavigator struct {
 	url               string
@@ -42,7 +42,7 @@ func (f *fileNavigator) checkPath(path string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return InvalidPath
+		return ErrorInvalidPath
 	}
 	var jArr []interface{}
 	json.NewDecoder(resp.Body).Decode(&jArr)
