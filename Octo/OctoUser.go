@@ -10,6 +10,10 @@ import (
 	"net/http"
 )
 
+const (
+	MaxOctoRepoSize = 100000000
+)
+
 type OctoUser interface {
 	CreateFile(path string, source io.Reader) error
 	NewMultiPartTransferer(Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer
@@ -21,13 +25,17 @@ type user struct {
 	commiter ToOcto.CommiterType
 }
 
-func (u *user) makeRequest(method string, repo string, path string, body io.Reader) (*http.Response, error) {
+func (u *user) makeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Response, error) {
 	rq, err := http.NewRequest(method, ToOcto.GetOctoURL(u.commiter.Name, repo, path), body)
 	if err != nil {
 		return nil, err
 	}
 	rq.Header.Add("Authorization", "token "+u.token)
-	rq.Header.Add("Accept", "application/vnd.github.v3.raw")
+	if is_raw {
+		rq.Header.Add("Accept", "application/vnd.github.v3.raw")
+	} else {
+		rq.Header.Add("Accept", "application/vnd.github.v3+json")
+	}
 	return http.DefaultClient.Do(rq)
 }
 
@@ -51,7 +59,7 @@ func (u *user) createRepository(name string, description string) (int, error) {
 
 func (u *user) CreateFile(path string, source io.Reader) error {
 	//get the last repository use
-	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "LastRepo.json", nil)
+	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "LastRepo.json", nil, true)
 	if err != nil {
 		return err
 	}
@@ -68,7 +76,7 @@ func (u *user) CreateFile(path string, source io.Reader) error {
 		return err
 	}
 	//make a new repository if it does not exists or if the last one is full
-	if lastRepo.Repo == nil || lastRepo.Usage > 1000000000 {
+	if lastRepo.Repo == nil || lastRepo.Usage >= MaxOctoRepoSize {
 		lastRepo.Repo = new(string)
 		*lastRepo.Repo = RandomString(10)
 		lastRepo.Usage = 0
@@ -80,15 +88,68 @@ func (u *user) CreateFile(path string, source io.Reader) error {
 			return fmt.Errorf("error creating repository: %s", res.Status)
 		}
 	}
+	fileID := RandomString(10)
+	paths := make([]string, 0)
+	paths = append(paths, *lastRepo.Repo+"/"+fileID)
 	//create a multipart transferer with source limiter for max repository size
-	reader := SourceLimiter{Source: source, MaxSize: 1000000000 - lastRepo.Usage}
-	for !reader.IsEOF() {
+	var reader SourceLimiter
+	for {
+		print("Transferring")
+		reader = SourceLimiter{Source: source, MaxSize: MaxOctoRepoSize - lastRepo.Usage}
 		//create a new multipart transferer
-		//transferer := u.NewMultiPartTransferer(*lastRepo.Repo, path, &reader)
+		transferer := u.NewMultiPartTransferer(*lastRepo.Repo, fileID, &reader)
+		err = nil
+		for err != io.EOF {
+			_, _, err = transferer.TransferPart()
+		}
+		if !reader.IsEOF() {
+			print("Creating new repository")
+			newRepo := RandomString(10)
+			status, err := u.createRepository(newRepo, "Repository for OctoDrive contents")
+			if err != nil {
+				return err
+			}
+			if status != http.StatusCreated {
+				return fmt.Errorf("error creating repository: %s", res.Status)
+			}
+			paths = append(paths, newRepo+"/"+fileID)
+			lastRepo.Repo = new(string)
+			*lastRepo.Repo = newRepo
+			lastRepo.Usage = 0
+		} else {
+			break
+		}
 	}
-	//transfer the file
-	//if the file is too big, create a new repository and transfer the file
-	//path = ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles/Folders", path)
+	//update the last repository
+	lastRepo.Usage += reader.CurrentSize
+	jso, err := json.Marshal(lastRepo)
+	if err != nil {
+		return err
+	}
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(jso)))
+	base64.StdEncoding.Encode(encoded, jso)
+	_, _, err = ToOcto.Update(ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles", "LastRepo.json"), u.token, u.commiter, bytes.NewBuffer(encoded))
+	if err != nil {
+		return err
+	}
+	//create file details
+	var FileDetails struct {
+		Name  string   `field:"name"`
+		Paths []string `field:"paths"`
+	}
+	FileDetails.Name = fileID
+	FileDetails.Paths = paths
+	data, err := json.Marshal(FileDetails)
+	if err != nil {
+		return err
+	}
+	encoded = make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	base64.StdEncoding.Encode(encoded, data)
+	_, Str, err := ToOcto.Transfer(http.DefaultClient, ToOcto.GetOctoURL(u.commiter.Name, "_Octofiles", "Contents/"+path), u.token, u.commiter, bytes.NewBuffer(encoded))
+	if err != nil {
+		return err
+	}
+	println(Str)
 	return nil
 }
 

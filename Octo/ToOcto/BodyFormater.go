@@ -19,11 +19,15 @@ type BodyFormater struct {
 	state    int
 	reader   io.Reader
 	commiter CommiterType
+	sha      *string
 }
 
 func (r *BodyFormater) Read(p []byte) (int, error) {
 	if r.state == 0 {
 		r.state = 1
+		if r.sha != nil {
+			return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"sha":"%s","content":"`, r.commiter.Name, r.commiter.Email, *r.sha)), nil
+		}
 		return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"content":"`, r.commiter.Name, r.commiter.Email)), nil
 	} else if r.state == 1 {
 		count, err := r.reader.Read(p)
