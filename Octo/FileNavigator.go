@@ -92,7 +92,7 @@ func (f *fileNavigator) GetItemList() []ItemType {
 
 func NewFileNavigator(RepoUser string, Repository string, token string, root string) (FileNavigator, error) {
 	f := fileNavigator{ToOcto.GetOctoURL(RepoUser, Repository, root), token, "", make([]ItemType, 0)}
-	err := f.checkPath(root)
+	err := f.checkPath("")
 	if err != nil {
 		return nil, errors.New("error fetching User/Repository/Root")
 	}
