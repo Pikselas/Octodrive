@@ -1,6 +1,8 @@
 package Octo
 
 import (
+	"Octo/Octo/ToOcto"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,10 +68,35 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	return
 }
 
+func getPartCount(User string, Token string, Repo string, Path string) (uint, error) {
+	url := ToOcto.GetOctoURL(User, Repo, Path)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Add("Accept", "application/vnd.github.v3.raw")
+	req.Header.Add("Authorization", "Bearer "+Token)
+	res, err := http.DefaultClient.Do(req)
+	fmt.Println(res.StatusCode)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+	var jArr []interface{}
+	json.NewDecoder(res.Body).Decode(&jArr)
+	return uint(len(jArr)), nil
+}
+
 func NewMultipartReader(from string, part_count int, token string) OctoMultiPartReader {
 	return &reader{
 		from:      from,
 		max_count: part_count,
 		token:     token,
+	}
+}
+
+func NewMultipartRangeReader(from string, part_start int, part_end int, token string) OctoMultiPartReader {
+	return &reader{
+		from:          from,
+		current_count: part_start,
+		max_count:     part_end,
+		token:         token,
 	}
 }
