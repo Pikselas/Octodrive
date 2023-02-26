@@ -60,11 +60,11 @@ func (t *transferer) TransferPart() (status_code int, resp_string string, err er
 	return 0, "", io.EOF
 }
 
-func NewMultiPartTransferer(Commiter CommiterType, Repo string, Path string, Token string, Source io.Reader) MultiPartTransferer {
+func NewMultiPartTransferer(Commiter CommiterType, Repo string, Path string, Token string, chunksize int64, Source io.Reader) MultiPartTransferer {
 	return &transferer{
 		token:               Token,
 		baseurl:             GetOctoURL(Commiter.Name, Repo, Path),
-		chunksize:           30000000,
+		chunksize:           chunksize,
 		commiter:            Commiter,
 		source:              Source,
 		active_reader:       &reader{},

@@ -11,12 +11,14 @@ import (
 )
 
 const (
-	MaxOctoRepoSize = 100000000
+	FileChunkSize   = 30015488
+	MaxOctoRepoSize = FileChunkSize * 30
 )
 
 type OctoUser interface {
 	CreateFile(path string, source io.Reader) error
 	LoadFile(path string, dest io.Writer) error
+	GetFile(path string) (*OctoFile, error)
 }
 
 type user struct {
@@ -138,8 +140,20 @@ func (u *user) LoadFile(path string, w io.Writer) error {
 	return nil
 }
 
+func (u *user) GetFile(path string) (*OctoFile, error) {
+	//get file details
+	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var FileDetails fileDetails
+	json.NewDecoder(res.Body).Decode(&FileDetails)
+	return &OctoFile{file: FileDetails, user_name: u.commiter.Name, user_token: u.token, FileSize: uint64(FileDetails.Size)}, nil
+}
+
 func (u *user) NewMultiPartTransferer(Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer {
-	return ToOcto.NewMultiPartTransferer(u.commiter, Repo, Path, u.token, Source)
+	return ToOcto.NewMultiPartTransferer(u.commiter, Repo, Path, u.token, FileChunkSize, Source)
 }
 
 func (u *user) NewMultiPartFileReader(Repo string, Path string) (OctoMultiPartReader, error) {
