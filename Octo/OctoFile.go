@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 )
 
 func getRawFileRequest(Url string, Token string) (*http.Request, error) {
@@ -18,60 +17,6 @@ func getRawFileRequest(Url string, Token string) (*http.Request, error) {
 	return req, nil
 }
 
-type delayedReader struct {
-	req         *http.Request
-	src         io.ReadCloser
-	ignoreBytes uint64
-	ignored     uint64
-}
-
-func (r *delayedReader) Read(p []byte) (n int, err error) {
-	if r.src == nil {
-		res, err := http.DefaultClient.Do(r.req)
-		if err != nil {
-			return 0, err
-		}
-		r.src = res.Body
-		n, err := io.CopyN(io.Discard, r.src, int64(r.ignoreBytes))
-		if err != nil {
-			return 0, err
-		}
-		fmt.Println("Ignored:", n)
-	}
-	return r.src.Read(p)
-}
-
-type remoteReader struct {
-	req *http.Request
-	src io.ReadCloser
-}
-
-func (r *remoteReader) Read(p []byte) (n int, err error) {
-	if r.src == nil {
-		res, err := http.DefaultClient.Do(r.req)
-		if err != nil {
-			return 0, err
-		}
-		r.src = res.Body
-	}
-	c, err := r.src.Read(p)
-	return c, err
-}
-
-func (r *remoteReader) Close() error {
-	if r.src != nil {
-		r.src.Close()
-		r.src = nil
-	}
-	return nil
-}
-
-type octoFileReader struct {
-	readers            []io.Reader
-	current_read_index uint
-	read_end           bool
-}
-
 type OctoFile struct {
 	file       fileDetails
 	user_name  string
@@ -81,25 +26,6 @@ type OctoFile struct {
 
 func (of *OctoFile) LoadFull() (io.Reader, error) {
 	return &octoFileReader{}, nil
-}
-
-func H() {
-	octoFile := OctoFile{}
-	octoFile.file.Size = MaxOctoRepoSize*3 + 2040320
-	octoFile.LoadBytes(MaxOctoRepoSize*3+2040320, 100)
-}
-
-func (of *OctoFile) Dummy() {
-	r, er := getRawFileRequest(ToOcto.GetOctoURL(of.user_name, of.file.Paths[0], of.file.Name), of.user_token)
-	if er != nil {
-		panic(er)
-	}
-	re := remoteReader{req: r}
-	fi, err := os.Create("File.wmv")
-	if err != nil {
-		panic(err)
-	}
-	io.Copy(fi, &re)
 }
 
 func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
@@ -171,21 +97,4 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		readers:  Rdrs,
 		read_end: true,
 	}, nil
-}
-
-func (r *octoFileReader) Read(p []byte) (n int, err error) {
-	if r.read_end && r.current_read_index < uint(len(r.readers)) {
-		r.read_end = false
-	}
-	if !r.read_end {
-		n, err := r.readers[r.current_read_index].Read(p)
-		if err == io.EOF {
-			r.read_end = true
-			r.current_read_index++
-		} else if err != nil {
-			return n, err
-		}
-		return n, nil
-	}
-	return 0, io.EOF
 }
