@@ -18,25 +18,43 @@ func getRawFileRequest(Url string, Token string) (*http.Request, error) {
 	return req, nil
 }
 
+type delayedReader struct {
+	req         *http.Request
+	src         io.ReadCloser
+	ignoreBytes uint64
+	ignored     uint64
+}
+
+func (r *delayedReader) Read(p []byte) (n int, err error) {
+	if r.src == nil {
+		res, err := http.DefaultClient.Do(r.req)
+		if err != nil {
+			return 0, err
+		}
+		r.src = res.Body
+		n, err := io.CopyN(io.Discard, r.src, int64(r.ignoreBytes))
+		if err != nil {
+			return 0, err
+		}
+		fmt.Println("Ignored:", n)
+	}
+	return r.src.Read(p)
+}
+
 type remoteReader struct {
 	req *http.Request
 	src io.ReadCloser
 }
 
 func (r *remoteReader) Read(p []byte) (n int, err error) {
-	fmt.Println("Reading", r.src)
 	if r.src == nil {
-		fmt.Println("Requesting", r.req)
 		res, err := http.DefaultClient.Do(r.req)
-		fmt.Println(err)
 		if err != nil {
 			return 0, err
 		}
-		fmt.Println(res.Status)
 		r.src = res.Body
 	}
 	c, err := r.src.Read(p)
-	fmt.Println("Read", c, err)
 	return c, err
 }
 
@@ -101,16 +119,16 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Add("Range", "bytes="+fmt.Sprint(StartPartOffset)+"-"+fmt.Sprint(EndPartOffset))
-		Rdrs = append(Rdrs, &remoteReader{req: req})
+		Rdrs = append(Rdrs, io.LimitReader(&delayedReader{req: req, ignoreBytes: StartPartOffset}, int64(EndPartOffset-StartPartOffset)))
 	} else if StartPathIndex == EndPathIndex {
+		fmt.Println("StartPathIndex == EndPathIndex")
 		// Make a http request to first file with start range
-		req, err := getRawFileRequest(ToOcto.GetOctoURL(of.user_name, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(StartPartNo)), of.user_token)
+		url := ToOcto.GetOctoURL(of.user_name, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(StartPartNo))
+		req, err := getRawFileRequest(url, of.user_token)
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Add("Range", "bytes="+fmt.Sprint(StartPartOffset)+"-")
-		Rdrs = append(Rdrs, &remoteReader{req: req})
+		Rdrs = append(Rdrs, &delayedReader{req: req, ignoreBytes: StartPartOffset})
 		// create range reader for intermediate files
 		Rdrs = append(Rdrs, NewMultipartRangeReader(ToOcto.GetOctoURL(of.user_name, of.file.Paths[StartPathIndex], of.file.Name), int(StartPartNo+1), int(EndPartNo), of.user_token))
 		// Make a http request to last file with end range
@@ -118,7 +136,6 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Add("Range", "bytes=0-"+fmt.Sprint(EndPartOffset))
 		Rdrs = append(Rdrs, &remoteReader{req: req})
 	} else {
 		// Make http request to first file
@@ -126,8 +143,7 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Add("Range", "bytes="+fmt.Sprint(StartPartOffset)+"-")
-		Rdrs = append(Rdrs, &remoteReader{req: req})
+		Rdrs = append(Rdrs, &delayedReader{req: req, ignoreBytes: StartPartOffset})
 		// create range reader from after the first file to last
 		partCount, err := getPartCount(of.user_name, of.user_token, of.file.Paths[StartPathIndex], of.file.Name)
 		if err != nil {
@@ -149,10 +165,8 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Add("Range", "bytes=0-"+fmt.Sprint(EndPartOffset))
-		Rdrs = append(Rdrs, &remoteReader{req: req})
+		Rdrs = append(Rdrs, io.LimitReader(&remoteReader{req: req}, int64(EndPartOffset)))
 	}
-	fmt.Println(len(Rdrs))
 	return &octoFileReader{
 		readers:  Rdrs,
 		read_end: true,
