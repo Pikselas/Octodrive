@@ -17,18 +17,44 @@ func getRawFileRequest(Url string, Token string) (*http.Request, error) {
 	return req, nil
 }
 
-type OctoFile struct {
+type OctoFile interface {
+	Get() (io.Reader, error)
+	GetName() string
+	GetSize() uint64
+	GetBytes(from uint64, to uint64) (io.Reader, error)
+}
+
+type octoFile struct {
 	file       fileDetails
 	user_name  string
 	user_token string
 	FileSize   uint64
 }
 
-func (of *OctoFile) LoadFull() (io.Reader, error) {
-	return &octoFileReader{}, nil
+func (of *octoFile) GetName() string {
+	return of.file.Name
 }
 
-func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
+func (of *octoFile) GetSize() uint64 {
+	return of.FileSize
+}
+
+func (of *octoFile) Get() (io.Reader, error) {
+	Rdrs := make([]io.Reader, 0)
+	for _, repo := range of.file.Paths {
+		c, err := getPartCount(of.user_name, of.user_token, repo, of.file.Name)
+		if err != nil {
+			return nil, err
+		}
+		Rdrs = append(Rdrs, NewMultipartReader(ToOcto.GetOctoURL(of.user_name, repo, of.file.Name), int(c), of.user_token))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &octoFileReader{readers: Rdrs, read_end: true}, nil
+}
+
+func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
 	StartPathIndex := from / MaxOctoRepoSize
 	EndPathIndex := to / MaxOctoRepoSize
 	StartPartNo := from % MaxOctoRepoSize / FileChunkSize
@@ -47,7 +73,6 @@ func (of *OctoFile) LoadBytes(from uint64, to uint64) (io.Reader, error) {
 		}
 		Rdrs = append(Rdrs, io.LimitReader(&delayedReader{req: req, ignoreBytes: StartPartOffset}, int64(EndPartOffset-StartPartOffset)))
 	} else if StartPathIndex == EndPathIndex {
-		fmt.Println("StartPathIndex == EndPathIndex")
 		// Make a http request to first file with start range
 		url := ToOcto.GetOctoURL(of.user_name, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(StartPartNo))
 		req, err := getRawFileRequest(url, of.user_token)

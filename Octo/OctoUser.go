@@ -16,9 +16,8 @@ const (
 )
 
 type OctoUser interface {
-	CreateFile(path string, source io.Reader) error
-	LoadFile(path string, dest io.Writer) error
-	GetFile(path string) (*OctoFile, error)
+	Create(path string, source io.Reader) error
+	Load(path string) (OctoFile, error)
 }
 
 type user struct {
@@ -58,7 +57,7 @@ func (u *user) createRepository(name string, description string) (int, error) {
 	return res.StatusCode, nil
 }
 
-func (u *user) CreateFile(path string, source io.Reader) error {
+func (u *user) Create(path string, source io.Reader) error {
 	var Repository string
 	//make a new repository
 	Repository = RandomString(10)
@@ -120,27 +119,7 @@ func (u *user) CreateFile(path string, source io.Reader) error {
 	return nil
 }
 
-func (u *user) LoadFile(path string, w io.Writer) error {
-	//get file details
-	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	var FileDetails fileDetails
-	json.NewDecoder(res.Body).Decode(&FileDetails)
-	//get file parts
-	for _, repo := range FileDetails.Paths {
-		r, err := u.NewMultiPartFileReader(repo, FileDetails.Name)
-		if err != nil {
-			return err
-		}
-		io.Copy(w, r)
-	}
-	return nil
-}
-
-func (u *user) GetFile(path string) (*OctoFile, error) {
+func (u *user) Load(path string) (OctoFile, error) {
 	//get file details
 	res, err := u.makeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
 	if err != nil {
@@ -149,7 +128,7 @@ func (u *user) GetFile(path string) (*OctoFile, error) {
 	defer res.Body.Close()
 	var FileDetails fileDetails
 	json.NewDecoder(res.Body).Decode(&FileDetails)
-	return &OctoFile{file: FileDetails, user_name: u.commiter.Name, user_token: u.token, FileSize: uint64(FileDetails.Size)}, nil
+	return &octoFile{file: FileDetails, user_name: u.commiter.Name, user_token: u.token, FileSize: uint64(FileDetails.Size)}, nil
 }
 
 func (u *user) NewMultiPartTransferer(Repo string, Path string, Source io.Reader) ToOcto.MultiPartTransferer {
@@ -170,7 +149,6 @@ func (u *user) NewMultiPartFileReader(Repo string, Path string) (OctoMultiPartRe
 	defer res.Body.Close()
 	var jArr []interface{}
 	json.NewDecoder(res.Body).Decode(&jArr)
-	fmt.Println(jArr)
 	return NewMultipartReader(url, len(jArr), u.token), nil
 }
 
