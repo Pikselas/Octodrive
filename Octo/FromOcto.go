@@ -3,7 +3,6 @@ package Octo
 import (
 	"Octo/Octo/ToOcto"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -15,13 +14,13 @@ type OctoMultiPartReader interface {
 }
 
 type reader struct {
-	from               string
-	token              string
+	repo               string
+	path               string
+	user               ToOcto.OctoUser
 	max_count          int
 	current_count      int
 	current_read_count int
 	read_count         int64
-	client             http.Client
 	current_source     io.ReadCloser
 }
 
@@ -34,19 +33,10 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
-		req, err := http.NewRequest(http.MethodGet, r.from+"/"+strconv.Itoa(r.current_count), nil)
+		r.current_source, err = r.user.GetContent(r.repo, r.path+strconv.Itoa(r.current_count))
 		if err != nil {
 			return 0, err
 		}
-		req.Header.Add("Accept", "application/vnd.github.v3.raw")
-		req.Header.Add("Authorization", "Bearer "+r.token)
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", r.current_read_count))
-		res, err := r.client.Do(req)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(res.Status)
-		r.current_source = res.Body
 	}
 	n, err = r.current_source.Read(p)
 	r.current_read_count += n
@@ -68,13 +58,12 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func getPartCount(User string, Token string, Repo string, Path string) (uint, error) {
-	url := ToOcto.GetOctoURL(User, Repo, Path)
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Add("Accept", "application/vnd.github.v3.raw")
-	req.Header.Add("Authorization", "Bearer "+Token)
+func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) {
+	req, err := User.MakeRequest(http.MethodGet, Repo, Path, nil, false)
+	if err != nil {
+		return 0, err
+	}
 	res, err := http.DefaultClient.Do(req)
-	fmt.Println(res.StatusCode)
 	if err != nil {
 		return 0, err
 	}
@@ -84,19 +73,21 @@ func getPartCount(User string, Token string, Repo string, Path string) (uint, er
 	return uint(len(jArr)), nil
 }
 
-func NewMultipartReader(from string, part_count int, token string) OctoMultiPartReader {
+func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_count int) OctoMultiPartReader {
 	return &reader{
-		from:      from,
+		repo:      Repo,
+		path:      Path,
+		user:      User,
 		max_count: part_count,
-		token:     token,
 	}
 }
 
-func NewMultipartRangeReader(from string, part_start int, part_end int, token string) OctoMultiPartReader {
+func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int) OctoMultiPartReader {
 	return &reader{
-		from:          from,
+		repo:          Repo,
+		path:          Path,
+		user:          User,
 		current_count: part_start,
 		max_count:     part_end,
-		token:         token,
 	}
 }

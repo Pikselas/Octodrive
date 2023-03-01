@@ -16,19 +16,20 @@ reader: from where contents can be read and injected in the "content" section of
 commiter: author's details
 */
 type BodyFormater struct {
-	state    int
-	reader   io.Reader
-	commiter CommiterType
-	sha      *string
+	state  int
+	reader io.Reader
+	name   string
+	email  string
+	sha    *string
 }
 
 func (r *BodyFormater) Read(p []byte) (int, error) {
 	if r.state == 0 {
 		r.state = 1
 		if r.sha != nil {
-			return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"sha":"%s","content":"`, r.commiter.Name, r.commiter.Email, *r.sha)), nil
+			return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"sha":"%s","content":"`, r.name, r.email, *r.sha)), nil
 		}
-		return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"content":"`, r.commiter.Name, r.commiter.Email)), nil
+		return copy(p, fmt.Sprintf(`{"message":"ADDED NEW FILE","committer":{"name":"%s","email":"%s"},"content":"`, r.name, r.email)), nil
 	} else if r.state == 1 {
 		count, err := r.reader.Read(p)
 		if err == io.EOF {
