@@ -33,7 +33,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
-		r.current_source, err = r.user.GetContent(r.repo, r.path+strconv.Itoa(r.current_count))
+		r.current_source, err = r.user.GetContent(r.repo, r.path+"/"+strconv.Itoa(r.current_count))
 		if err != nil {
 			return 0, err
 		}
