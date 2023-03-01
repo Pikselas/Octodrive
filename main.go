@@ -4,16 +4,31 @@ import (
 	"Octo/Octo"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 )
 
-func StreamFile(of Octo.OctoFile) func(http.ResponseWriter, *http.Request) {
+func PrintIP() {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		panic(err)
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				fmt.Println(ipnet.IP.String())
+			}
+		}
+	}
+}
+
+func StreamFile(of Octo.OctoFile, Type string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Request")
-		w.Header().Set("Content-Type", "video/x-ms-wmv")
+		w.Header().Set("Content-Type", Type)
 		w.Header().Set("Accept-Ranges", "bytes")
 		byteRange := r.Header.Get("Range")
 		parsedStart := int64(0)
@@ -45,26 +60,27 @@ func StreamFile(of Octo.OctoFile) func(http.ResponseWriter, *http.Request) {
 }
 
 func main() {
-	u, err := Octo.NewOctoUser("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
+	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
 	if err != nil {
 		panic(err)
 	}
-	of, err := u.Load("File.mp4")
+	fn, err := drive.NewFileNavigator()
 	if err != nil {
 		panic(err)
 	}
-	f, err := os.Create("File.wmv")
-	if err != nil {
-		panic(err)
+	fmt.Println("ALL SERVER IP on port 8080:")
+	PrintIP()
+	files := fn.GetItemList()
+	fmt.Println("\nTOTAL FILES", len(files))
+	for _, file := range files {
+		if !file.IsDir {
+			of, err := drive.Load(file.Name)
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("Serving", file.Name)
+			http.HandleFunc("/"+file.Name, StreamFile(of, "application/octet-stream"))
+		}
 	}
-	defer f.Close()
-	r, err := of.Get()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Copying")
-	io.Copy(f, r)
-	fmt.Println("Done")
-	http.HandleFunc("/f.wmv", StreamFile(of))
 	http.ListenAndServe(":8080", nil)
 }

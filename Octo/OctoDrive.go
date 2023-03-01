@@ -18,17 +18,18 @@ const (
 type OctoDrive interface {
 	Create(path string, source io.Reader) error
 	Load(path string) (OctoFile, error)
+	NewFileNavigator() (FileNavigator, error)
 }
 
-type user struct {
+type octoDrive struct {
 	user ToOcto.OctoUser
 }
 
-func (u *user) Create(path string, source io.Reader) error {
+func (drive *octoDrive) Create(path string, source io.Reader) error {
 	var Repository string
 	//make a new repository
 	Repository = RandomString(10)
-	status, err := u.user.CreateRepository(Repository, "Repository for OctoDrive contents")
+	status, err := drive.user.CreateRepository(Repository, "Repository for OctoDrive contents")
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func (u *user) Create(path string, source io.Reader) error {
 	for {
 		reader = NewSourceLimiter(source, MaxOctoRepoSize)
 		//create a new multipart transferer
-		transferer := ToOcto.NewMultiPartTransferer(u.user, Repository, fileID, FileChunkSize, reader)
+		transferer := ToOcto.NewMultiPartTransferer(drive.user, Repository, fileID, FileChunkSize, reader)
 		err = nil
 		for err != io.EOF {
 			_, _, err = transferer.TransferPart()
@@ -54,7 +55,7 @@ func (u *user) Create(path string, source io.Reader) error {
 		if !reader.IsEOF() {
 			print("Creating new repository")
 			newRepo := RandomString(10)
-			status, err := u.user.CreateRepository(newRepo, "Repository for OctoDrive contents")
+			status, err := drive.user.CreateRepository(newRepo, "Repository for OctoDrive contents")
 			if err != nil {
 				return err
 			}
@@ -78,7 +79,7 @@ func (u *user) Create(path string, source io.Reader) error {
 	}
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(encoded, data)
-	_, Str, err := u.user.Transfer("_Octofiles", "Contents/"+path, bytes.NewBuffer(encoded))
+	_, Str, err := drive.user.Transfer("_Octofiles", "Contents/"+path, bytes.NewBuffer(encoded))
 	if err != nil {
 		return err
 	}
@@ -86,9 +87,9 @@ func (u *user) Create(path string, source io.Reader) error {
 	return nil
 }
 
-func (u *user) Load(path string) (OctoFile, error) {
+func (drive *octoDrive) Load(path string) (OctoFile, error) {
 	//get file details
-	req, err := u.user.MakeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
+	req, err := drive.user.MakeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +100,11 @@ func (u *user) Load(path string) (OctoFile, error) {
 	defer res.Body.Close()
 	var FileDetails fileDetails
 	json.NewDecoder(res.Body).Decode(&FileDetails)
-	return &octoFile{file: FileDetails, user: u.user, FileSize: uint64(FileDetails.Size)}, nil
+	return &octoFile{file: FileDetails, user: drive.user, FileSize: uint64(FileDetails.Size)}, nil
+}
+
+func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {
+	return NewFileNavigator(drive.user, "_Octofiles", "Contents")
 }
 
 func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
@@ -107,7 +112,7 @@ func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
 	if err != nil {
 		return nil, err
 	}
-	U := user{user: oU}
+	od := octoDrive{user: oU}
 	status, err := oU.CreateRepository("_Octofiles", "Initial repo for OctoDrive contents")
 	if err != nil {
 		return nil, err
@@ -115,5 +120,5 @@ func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
 	if status != http.StatusCreated && status != http.StatusUnprocessableEntity {
 		return nil, fmt.Errorf("error creating repository: %d", status)
 	}
-	return &U, err
+	return &od, err
 }

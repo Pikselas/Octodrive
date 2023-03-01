@@ -24,24 +24,24 @@ type FileNavigator interface {
 var ErrorInvalidPath = errors.New("path not found")
 
 type fileNavigator struct {
-	url               string
-	token             string
+	user              ToOcto.OctoUser
+	root              string
+	repository        string
 	current_directory string
 	dir_items         []ItemType
 }
 
 func (f *fileNavigator) checkPath(path string) error {
-	req, err := http.NewRequest("GET", f.url+"/"+path, nil)
+	req, err := f.user.MakeRequest(http.MethodGet, f.repository, f.root+"/"+path, nil, false)
 	if err != nil {
 		return err
 	}
-	req.Header.Add("Authorization", "Bearer "+f.token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return ErrorInvalidPath
 	}
 	var jArr []interface{}
@@ -90,8 +90,8 @@ func (f *fileNavigator) GetItemList() []ItemType {
 	return f.dir_items
 }
 
-func NewFileNavigator(RepoUser string, Repository string, token string, root string) (FileNavigator, error) {
-	f := fileNavigator{ToOcto.GetOctoURL(RepoUser, Repository, root), token, "", make([]ItemType, 0)}
+func NewFileNavigator(User ToOcto.OctoUser, Repository string, Root string) (FileNavigator, error) {
+	f := fileNavigator{user: User, repository: Repository, root: Root, dir_items: make([]ItemType, 0)}
 	err := f.checkPath("")
 	if err != nil {
 		return nil, errors.New("error fetching User/Repository/Root")

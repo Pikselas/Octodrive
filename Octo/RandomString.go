@@ -1,16 +1,15 @@
 package Octo
 
 import (
+	"encoding/base64"
 	"math/rand"
-	"time"
 )
 
 func RandomString(length int) string {
-	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, length)
-	rand.Seed(time.Now().UnixNano())
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+	randomBytes := make([]byte, length)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		panic(err)
 	}
-	return string(b)
+	return base64.URLEncoding.EncodeToString(randomBytes)[:length]
 }
