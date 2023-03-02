@@ -15,9 +15,8 @@ type OctoFile interface {
 }
 
 type octoFile struct {
-	file     fileDetails
-	user     ToOcto.OctoUser
-	FileSize uint64
+	file fileDetails
+	user ToOcto.OctoUser
 }
 
 func (of *octoFile) GetName() string {
@@ -25,7 +24,7 @@ func (of *octoFile) GetName() string {
 }
 
 func (of *octoFile) GetSize() uint64 {
-	return of.FileSize
+	return of.file.Size
 }
 
 func (of *octoFile) Get() (io.Reader, error) {

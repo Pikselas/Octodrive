@@ -9,7 +9,7 @@ import (
 )
 
 type OctoMultiPartReader interface {
-	GetReadCount() int64
+	GetReadCount() uint64
 	Read(p []byte) (n int, err error)
 }
 
@@ -20,11 +20,11 @@ type reader struct {
 	max_count          int
 	current_count      int
 	current_read_count int
-	read_count         int64
+	read_count         uint64
 	current_source     io.ReadCloser
 }
 
-func (r *reader) GetReadCount() int64 {
+func (r *reader) GetReadCount() uint64 {
 	return r.read_count
 }
 

@@ -28,7 +28,7 @@ type octoDrive struct {
 func (drive *octoDrive) Create(path string, source io.Reader) error {
 	var Repository string
 	//make a new repository
-	Repository = RandomString(10)
+	Repository = ToOcto.RandomString(10)
 	status, err := drive.user.CreateRepository(Repository, "Repository for OctoDrive contents")
 	if err != nil {
 		return err
@@ -36,12 +36,12 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 	if status != http.StatusCreated {
 		return fmt.Errorf("error creating repository: %d", status)
 	}
-	fileID := RandomString(10)
+	fileID := ToOcto.RandomString(10)
 	paths := make([]string, 0)
 	paths = append(paths, Repository)
 	//create a multipart transferer with source limiter for max repository size
 	var reader SourceLimiter
-	var ContentSize int64 = 0
+	var ContentSize uint64 = 0
 	for {
 		reader = NewSourceLimiter(source, MaxOctoRepoSize)
 		//create a new multipart transferer
@@ -54,7 +54,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 		ContentSize += reader.GetCurrentSize()
 		if !reader.IsEOF() {
 			print("Creating new repository")
-			newRepo := RandomString(10)
+			newRepo := ToOcto.RandomString(10)
 			status, err := drive.user.CreateRepository(newRepo, "Repository for OctoDrive contents")
 			if err != nil {
 				return err
@@ -100,7 +100,7 @@ func (drive *octoDrive) Load(path string) (OctoFile, error) {
 	defer res.Body.Close()
 	var FileDetails fileDetails
 	json.NewDecoder(res.Body).Decode(&FileDetails)
-	return &octoFile{file: FileDetails, user: drive.user, FileSize: uint64(FileDetails.Size)}, nil
+	return &octoFile{file: FileDetails, user: drive.user}, nil
 }
 
 func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {

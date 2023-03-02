@@ -4,14 +4,14 @@ import "io"
 
 type SourceLimiter interface {
 	IsEOF() bool
-	GetCurrentSize() int64
+	GetCurrentSize() uint64
 	Read(p []byte) (n int, err error)
 }
 
 type sourceLimiter struct {
 	source      io.Reader
-	maxSize     int64
-	currentSize int64
+	maxSize     uint64
+	currentSize uint64
 	sourceEOF   bool
 }
 
@@ -20,7 +20,7 @@ func (s *sourceLimiter) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	n, err = s.source.Read(p)
-	s.currentSize += int64(n)
+	s.currentSize += uint64(n)
 	if err == io.EOF {
 		s.sourceEOF = true
 	}
@@ -31,11 +31,11 @@ func (s *sourceLimiter) IsEOF() bool {
 	return s.sourceEOF
 }
 
-func (s *sourceLimiter) GetCurrentSize() int64 {
+func (s *sourceLimiter) GetCurrentSize() uint64 {
 	return s.currentSize
 }
 
-func NewSourceLimiter(source io.Reader, maxSize int64) SourceLimiter {
+func NewSourceLimiter(source io.Reader, maxSize uint64) SourceLimiter {
 	return &sourceLimiter{
 		source:  source,
 		maxSize: maxSize,
