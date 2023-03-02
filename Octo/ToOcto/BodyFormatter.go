@@ -6,16 +6,15 @@ import (
 )
 
 /*
- Formats giithub-API compatible body based on
+ Formats github-API compatible body based on
  https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
 */
 
 /*
-state: represnts formation state (always use 0).
+state: represents formation state (always use 0).
 reader: from where contents can be read and injected in the "content" section of json.
-commiter: author's details
 */
-type BodyFormater struct {
+type BodyFormatter struct {
 	state  int
 	reader io.Reader
 	name   string
@@ -23,7 +22,7 @@ type BodyFormater struct {
 	sha    *string
 }
 
-func (r *BodyFormater) Read(p []byte) (int, error) {
+func (r *BodyFormatter) Read(p []byte) (int, error) {
 	if r.state == 0 {
 		r.state = 1
 		if r.sha != nil {
