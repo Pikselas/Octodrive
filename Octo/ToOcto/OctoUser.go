@@ -57,8 +57,8 @@ func (u *octoUser) CreateRepository(name string, description string) (int, error
 }
 
 func (u *octoUser) transfer(target string, body io.Reader, sha *string) (resp_code int, resp_string string, err error) {
-	bodyformater := BodyFormater{reader: body, sha: sha, name: u.name, email: u.email}
-	GithubReq, err := http.NewRequest(http.MethodPut, target, &bodyformater)
+	body_formatter := BodyFormatter{reader: body, sha: sha, name: u.name, email: u.email}
+	GithubReq, err := http.NewRequest(http.MethodPut, target, &body_formatter)
 	if err != nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (u *octoUser) Transfer(repo string, path string, body io.Reader) (resp_code
 	return u.transfer(GetOctoURL(u.name, repo, path), body, nil)
 }
 
-// Updating File is expnsive , Should only be done for small files
+// Updating File is expensive , Should only be done for small files
 func (u *octoUser) Update(repo string, path string, data io.Reader) (resp_code int, resp_string string, err error) {
 	target := GetOctoURL(u.name, repo, path)
 	//get the sha of the file
