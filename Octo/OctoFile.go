@@ -43,12 +43,12 @@ func (of *octoFile) Get() (io.Reader, error) {
 }
 
 func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
-	StartPathIndex := from / MaxOctoRepoSize
-	EndPathIndex := to / MaxOctoRepoSize
-	StartPartNo := from % MaxOctoRepoSize / FileChunkSize
-	StartPartOffset := from % MaxOctoRepoSize % FileChunkSize
-	EndPartNo := to % MaxOctoRepoSize / FileChunkSize
-	EndPartOffset := to % MaxOctoRepoSize % FileChunkSize
+	StartPathIndex := from / of.file.MaxRepoSize
+	EndPathIndex := to / of.file.MaxRepoSize
+	StartPartNo := from % of.file.MaxRepoSize / of.file.ChunkSize
+	StartPartOffset := from % of.file.MaxRepoSize % of.file.ChunkSize
+	EndPartNo := to % of.file.MaxRepoSize / of.file.ChunkSize
+	EndPartOffset := to % of.file.MaxRepoSize % of.file.ChunkSize
 
 	fmt.Println(StartPathIndex, EndPathIndex, StartPartNo, StartPartOffset, EndPartNo, EndPartOffset)
 

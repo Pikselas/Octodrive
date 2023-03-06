@@ -69,10 +69,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 		}
 	}
 	//create file details
-	var FileDetails fileDetails
-	FileDetails.Name = fileID
-	FileDetails.Paths = paths
-	FileDetails.Size = ContentSize
+	FileDetails := fileDetails{Name: fileID, Paths: paths, Size: ContentSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize}
 	data, err := json.Marshal(FileDetails)
 	if err != nil {
 		return err

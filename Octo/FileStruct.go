@@ -1,7 +1,9 @@
 package Octo
 
 type fileDetails struct {
-	Name  string   `field:"name"`
-	Paths []string `field:"paths"`
-	Size  uint64   `field:"size"`
+	Name        string
+	Paths       []string
+	Size        uint64
+	ChunkSize   uint64
+	MaxRepoSize uint64
 }
