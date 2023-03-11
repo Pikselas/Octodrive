@@ -25,7 +25,7 @@ type octoUser struct {
 }
 
 func (u *octoUser) MakeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Request, error) {
-	rq, err := http.NewRequest(method, GetOctoURL(u.name, repo, path), body)
+	rq, err := http.NewRequest(method, getOctoURL(u.name, repo, path), body)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +74,12 @@ func (u *octoUser) transfer(target string, body io.Reader, sha *string) (resp_co
 }
 
 func (u *octoUser) Transfer(repo string, path string, body io.Reader) (resp_code int, resp_string string, err error) {
-	return u.transfer(GetOctoURL(u.name, repo, path), body, nil)
+	return u.transfer(getOctoURL(u.name, repo, path), body, nil)
 }
 
 // Updating File is expensive , Should only be done for small files
 func (u *octoUser) Update(repo string, path string, data io.Reader) (resp_code int, resp_string string, err error) {
-	target := GetOctoURL(u.name, repo, path)
+	target := getOctoURL(u.name, repo, path)
 	//get the sha of the file
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
