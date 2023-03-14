@@ -8,10 +8,23 @@ import (
 )
 
 type OctoFile interface {
-	Get() (io.Reader, error)
+	Get() (io.ReadCloser, error)
 	GetName() string
 	GetSize() uint64
-	GetBytes(from uint64, to uint64) (io.Reader, error)
+	GetBytes(from uint64, to uint64) (io.ReadCloser, error)
+}
+
+type LimiterCloser struct {
+	limiter io.Reader
+	closer  io.Closer
+}
+
+func (lc *LimiterCloser) Read(p []byte) (n int, err error) {
+	return lc.limiter.Read(p)
+}
+
+func (lc *LimiterCloser) Close() error {
+	return lc.closer.Close()
 }
 
 type octoFile struct {
@@ -27,8 +40,8 @@ func (of *octoFile) GetSize() uint64 {
 	return of.file.Size
 }
 
-func (of *octoFile) Get() (io.Reader, error) {
-	Rdrs := make([]io.Reader, 0)
+func (of *octoFile) Get() (io.ReadCloser, error) {
+	Rdrs := make([]io.ReadCloser, 0)
 	for _, repo := range of.file.Paths {
 		c, err := getPartCount(of.user, repo, of.file.Name)
 		if err != nil {
@@ -42,7 +55,7 @@ func (of *octoFile) Get() (io.Reader, error) {
 	return &octoFileReader{readers: Rdrs, read_end: true}, nil
 }
 
-func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
+func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 	StartPathIndex := from / of.file.MaxRepoSize
 	EndPathIndex := to / of.file.MaxRepoSize
 	StartPartNo := from % of.file.MaxRepoSize / of.file.ChunkSize
@@ -52,7 +65,7 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
 
 	fmt.Println(StartPathIndex, EndPathIndex, StartPartNo, StartPartOffset, EndPartNo, EndPartOffset)
 
-	Rdrs := make([]io.Reader, 0)
+	Rdrs := make([]io.ReadCloser, 0)
 	if StartPathIndex == EndPathIndex && StartPartNo == EndPartNo {
 		// Make a http Request to file with start and end range
 		//of.user.MakeRequest(,)
@@ -60,7 +73,9 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, io.LimitReader(&delayedReader{req: req, ignoreBytes: StartPartOffset}, int64(EndPartOffset-StartPartOffset)))
+		delayed_reader := &delayedReader{req: req, ignoreBytes: StartPartOffset}
+		limiter_closer := &LimiterCloser{limiter: io.LimitReader(delayed_reader, int64(EndPartOffset-StartPartOffset)), closer: delayed_reader}
+		Rdrs = append(Rdrs, limiter_closer)
 	} else if StartPathIndex == EndPathIndex {
 		// Make a http request to first file with start range
 		req, err := of.user.MakeRequest(http.MethodGet, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(StartPartNo), nil, true)
@@ -104,7 +119,8 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, io.LimitReader(&remoteReader{req: req}, int64(EndPartOffset)))
+		remote_reader := &remoteReader{req: req}
+		Rdrs = append(Rdrs, &LimiterCloser{limiter: io.LimitReader(remote_reader, int64(EndPartOffset)), closer: remote_reader})
 	}
 	return &octoFileReader{
 		readers:  Rdrs,

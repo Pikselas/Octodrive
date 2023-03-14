@@ -11,6 +11,7 @@ import (
 type OctoMultiPartReader interface {
 	GetReadCount() uint64
 	Read(p []byte) (n int, err error)
+	Close() error
 }
 
 type reader struct {
@@ -56,6 +57,13 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return
 	}
 	return
+}
+
+func (r *reader) Close() error {
+	if r.current_source != nil {
+		return r.current_source.Close()
+	}
+	return nil
 }
 
 func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) {

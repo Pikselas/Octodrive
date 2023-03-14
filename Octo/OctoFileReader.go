@@ -28,6 +28,14 @@ func (r *delayedReader) Read(p []byte) (n int, err error) {
 	return r.src.Read(p)
 }
 
+func (r *delayedReader) Close() error {
+	if r.src != nil {
+		r.src.Close()
+		r.src = nil
+	}
+	return nil
+}
+
 type remoteReader struct {
 	req *http.Request
 	src io.ReadCloser
@@ -54,7 +62,7 @@ func (r *remoteReader) Close() error {
 }
 
 type octoFileReader struct {
-	readers            []io.Reader
+	readers            []io.ReadCloser
 	current_read_index uint
 	read_end           bool
 }
@@ -66,6 +74,7 @@ func (r *octoFileReader) Read(p []byte) (n int, err error) {
 	if !r.read_end {
 		n, err := r.readers[r.current_read_index].Read(p)
 		if err == io.EOF {
+			r.readers[r.current_read_index].Close()
 			r.read_end = true
 			r.current_read_index++
 		} else if err != nil {
@@ -74,4 +83,10 @@ func (r *octoFileReader) Read(p []byte) (n int, err error) {
 		return n, nil
 	}
 	return 0, io.EOF
+}
+
+func (r *octoFileReader) Close() error {
+	r.readers[r.current_read_index].Close()
+	r.current_read_index = uint(len(r.readers))
+	return nil
 }
