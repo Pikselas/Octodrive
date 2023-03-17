@@ -86,7 +86,9 @@ func (r *octoFileReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *octoFileReader) Close() error {
-	r.readers[r.current_read_index].Close()
-	r.current_read_index = uint(len(r.readers))
+	if r.current_read_index < uint(len(r.readers)) {
+		r.readers[r.current_read_index].Close()
+		r.current_read_index = uint(len(r.readers))
+	}
 	return nil
 }
