@@ -11,6 +11,10 @@ import (
 )
 
 const (
+	OctoFileRegistry = "_Octofiles"
+)
+
+const (
 	FileChunkSize   = 30015488
 	MaxOctoRepoSize = FileChunkSize * 30
 )
@@ -41,6 +45,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 	paths = append(paths, Repository)
 	//create a multipart transferer with source limiter for max repository size
 	var reader SourceLimiter
+
 	var ContentSize uint64 = 0
 	for {
 		reader = NewSourceLimiter(source, MaxOctoRepoSize)
@@ -76,7 +81,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 	}
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(encoded, data)
-	_, Str, err := drive.user.Transfer("_Octofiles", "Contents/"+path, bytes.NewBuffer(encoded))
+	_, Str, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(encoded))
 	if err != nil {
 		return err
 	}
@@ -86,7 +91,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 
 func (drive *octoDrive) Load(path string) (OctoFile, error) {
 	//get file details
-	req, err := drive.user.MakeRequest(http.MethodGet, "_Octofiles", "Contents/"+path, nil, true)
+	req, err := drive.user.MakeRequest(http.MethodGet, OctoFileRegistry, "Contents/"+path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +106,7 @@ func (drive *octoDrive) Load(path string) (OctoFile, error) {
 }
 
 func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {
-	return NewFileNavigator(drive.user, "_Octofiles", "Contents")
+	return NewFileNavigator(drive.user, OctoFileRegistry, "Contents")
 }
 
 func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
@@ -110,7 +115,7 @@ func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
 		return nil, err
 	}
 	od := octoDrive{user: oU}
-	status, err := oU.CreateRepository("_Octofiles", "Initial repo for OctoDrive contents")
+	status, err := oU.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
 	if err != nil {
 		return nil, err
 	}
