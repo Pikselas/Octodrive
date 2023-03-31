@@ -46,12 +46,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		r.current_count++
 		r.current_read_count = 0
 		r.current_source = nil
-		if n > 0 {
-			return n, nil
-		}
-		n, err = r.Read(p)
-		r.current_read_count = n
-		return
+		return n, nil
 	} else if err != nil {
 		r.current_source = nil
 		return
