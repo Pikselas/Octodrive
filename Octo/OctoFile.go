@@ -42,12 +42,13 @@ func (of *octoFile) GetSize() uint64 {
 
 func (of *octoFile) Get() (io.ReadCloser, error) {
 	Rdrs := make([]io.ReadCloser, 0)
+	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
 	for _, repo := range of.file.Paths {
 		c, err := getPartCount(of.user, repo, of.file.Name)
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, NewMultipartReader(of.user, repo, of.file.Name, int(c)))
+		Rdrs = append(Rdrs, NewMultipartReader(of.user, repo, of.file.Name, int(c), enc_dec))
 		if err != nil {
 			return nil, err
 		}
@@ -65,6 +66,8 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 
 	fmt.Println(StartPathIndex, EndPathIndex, StartPartNo, StartPartOffset, EndPartNo, EndPartOffset)
 
+	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
+
 	Rdrs := make([]io.ReadCloser, 0)
 	if StartPathIndex == EndPathIndex && StartPartNo == EndPartNo {
 		// Make a http Request to file with start and end range
@@ -73,7 +76,7 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		delayed_reader := &delayedReader{req: req, ignoreBytes: StartPartOffset}
+		delayed_reader := &delayedReader{req: req, decrypter: enc_dec, ignoreBytes: StartPartOffset}
 		limiter_closer := &LimiterCloser{limiter: io.LimitReader(delayed_reader, int64(EndPartOffset-StartPartOffset)), closer: delayed_reader}
 		Rdrs = append(Rdrs, limiter_closer)
 	} else if StartPathIndex == EndPathIndex {
@@ -82,44 +85,44 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, &delayedReader{req: req, ignoreBytes: StartPartOffset})
+		Rdrs = append(Rdrs, &delayedReader{req: req, decrypter: enc_dec, ignoreBytes: StartPartOffset})
 		// create range reader for intermediate files
-		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[StartPathIndex], of.file.Name, int(StartPartNo+1), int(EndPartNo)))
+		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[StartPathIndex], of.file.Name, int(StartPartNo+1), int(EndPartNo), enc_dec))
 		// Make a http request to last file with end range
 		req, err = of.user.MakeRequest(http.MethodGet, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(EndPartNo), nil, true)
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, &remoteReader{req: req})
+		Rdrs = append(Rdrs, &remoteReader{req: req, decrypter: enc_dec})
 	} else {
 		// Make http request to first file
 		req, err := of.user.MakeRequest(http.MethodGet, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(StartPartNo), nil, true)
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, &delayedReader{req: req, ignoreBytes: StartPartOffset})
+		Rdrs = append(Rdrs, &delayedReader{req: req, decrypter: enc_dec, ignoreBytes: StartPartOffset})
 		// create range reader from after the first file to last
 		partCount, err := getPartCount(of.user, of.file.Paths[StartPathIndex], of.file.Name)
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[StartPathIndex], of.file.Name, int(StartPartNo+1), int(partCount)))
+		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[StartPathIndex], of.file.Name, int(StartPartNo+1), int(partCount), enc_dec))
 		// create a loop from 2nd first path to 2nd last path and Range reader
 		for i := StartPathIndex + 1; i < EndPathIndex; i++ {
 			partCount, err := getPartCount(of.user, of.file.Paths[i], of.file.Name)
 			if err != nil {
 				return nil, err
 			}
-			Rdrs = append(Rdrs, NewMultipartReader(of.user, of.file.Paths[i], of.file.Name, int(partCount)))
+			Rdrs = append(Rdrs, NewMultipartReader(of.user, of.file.Paths[i], of.file.Name, int(partCount), enc_dec))
 		}
 		// create range reader from 0 to before the last file
-		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[EndPathIndex], of.file.Name, 0, int(EndPartNo)))
+		Rdrs = append(Rdrs, NewMultipartRangeReader(of.user, of.file.Paths[EndPathIndex], of.file.Name, 0, int(EndPartNo), enc_dec))
 		// make http request to the last file
 		req, err = of.user.MakeRequest(http.MethodGet, of.file.Paths[StartPathIndex], of.file.Name+"/"+fmt.Sprint(EndPartNo), nil, true)
 		if err != nil {
 			return nil, err
 		}
-		remote_reader := &remoteReader{req: req}
+		remote_reader := &remoteReader{req: req, decrypter: enc_dec}
 		Rdrs = append(Rdrs, &LimiterCloser{limiter: io.LimitReader(remote_reader, int64(EndPartOffset)), closer: remote_reader})
 	}
 	return &octoFileReader{

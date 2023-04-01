@@ -32,8 +32,15 @@ type octoDrive struct {
 
 func (drive *octoDrive) Create(path string, source io.Reader) error {
 
-	//Generate FileID
 	fileID := ToOcto.RandomString(10)
+	fileKey, err := generateKey(32)
+	if err != nil {
+		return err
+	}
+	fileIV, err := generateKey(16)
+	if err != nil {
+		return err
+	}
 	filePaths := make([]string, 0)
 	fileSize := uint64(0)
 	for {
@@ -51,9 +58,14 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 		var fileCount int = 0
 		for {
 			chunkLimiter := NewSourceLimiter(repoLimiter, FileChunkSize)
+			enc_dec := newAesEncDec(fileKey, fileIV)
+			encrypted_reader, err := enc_dec.Encrypt(chunkLimiter)
 			buff := bytes.Buffer{}
 			enc := base64.NewEncoder(base64.StdEncoding, &buff)
-			encR := ToOcto.NewEncodedReader(chunkLimiter, enc, &buff, FileChunkSize)
+			encR := ToOcto.NewEncodedReader(encrypted_reader, enc, &buff, MaxOctoRepoSize)
+			if err != nil {
+				return err
+			}
 			stat, str, err := drive.user.Transfer(Repository, fileID+"/"+strconv.Itoa(fileCount), encR)
 			if err != nil {
 				return err
@@ -72,8 +84,11 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 			break
 		}
 	}
+	key := make([]byte, 48)
+	copy(key, fileKey)
+	copy(key[32:], fileIV)
 	//create file details
-	FileDetails := fileDetails{Name: fileID, Paths: filePaths, Size: fileSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize}
+	FileDetails := fileDetails{Name: fileID, Paths: filePaths, Size: fileSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize, Key: key}
 	data, err := json.Marshal(FileDetails)
 	if err != nil {
 		return err

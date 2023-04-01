@@ -8,6 +8,10 @@ import (
 	"strconv"
 )
 
+type Decrypter interface {
+	Decrypt(io.Reader) (io.Reader, error)
+}
+
 type OctoMultiPartReader interface {
 	GetReadCount() uint64
 	Read(p []byte) (n int, err error)
@@ -22,7 +26,9 @@ type reader struct {
 	current_count      int
 	current_read_count int
 	read_count         uint64
-	current_source     io.ReadCloser
+	current_source     io.Reader
+	decrypter          Decrypter
+	source_closer      io.Closer
 }
 
 func (r *reader) GetReadCount() uint64 {
@@ -38,11 +44,18 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		if err != nil {
 			return 0, err
 		}
+		if r.decrypter != nil {
+			r.current_source, err = r.decrypter.Decrypt(r.current_source)
+			if err != nil {
+				return 0, err
+			}
+		}
 	}
 	n, err = r.current_source.Read(p)
 	r.current_read_count += n
 	if err == io.EOF {
-		r.current_source.Close()
+		r.Close()
+		r.source_closer = nil
 		r.current_count++
 		r.current_read_count = 0
 		r.current_source = nil
@@ -55,8 +68,8 @@ func (r *reader) Read(p []byte) (n int, err error) {
 }
 
 func (r *reader) Close() error {
-	if r.current_source != nil {
-		return r.current_source.Close()
+	if r.current_source != nil && r.source_closer != nil {
+		return r.source_closer.Close()
 	}
 	return nil
 }
@@ -76,21 +89,23 @@ func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) 
 	return uint(len(jArr)), nil
 }
 
-func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_count int) OctoMultiPartReader {
+func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_count int, dec Decrypter) OctoMultiPartReader {
 	return &reader{
 		repo:      Repo,
 		path:      Path,
 		user:      User,
 		max_count: part_count,
+		decrypter: dec,
 	}
 }
 
-func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int) OctoMultiPartReader {
+func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int, dec Decrypter) OctoMultiPartReader {
 	return &reader{
 		repo:          Repo,
 		path:          Path,
 		user:          User,
 		current_count: part_start,
 		max_count:     part_end,
+		decrypter:     dec,
 	}
 }

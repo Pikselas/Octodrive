@@ -8,7 +8,9 @@ import (
 
 type delayedReader struct {
 	req         *http.Request
-	src         io.ReadCloser
+	src         io.Reader
+	src_closer  io.Closer
+	decrypter   Decrypter
 	ignoreBytes uint64
 }
 
@@ -19,6 +21,13 @@ func (r *delayedReader) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 		r.src = res.Body
+		r.src_closer = res.Body
+		if r.decrypter != nil {
+			r.src, err = r.decrypter.Decrypt(r.src)
+			if err != nil {
+				return 0, err
+			}
+		}
 		n, err := io.CopyN(io.Discard, r.src, int64(r.ignoreBytes))
 		if err != nil {
 			return 0, err
@@ -30,15 +39,17 @@ func (r *delayedReader) Read(p []byte) (n int, err error) {
 
 func (r *delayedReader) Close() error {
 	if r.src != nil {
-		r.src.Close()
+		r.src_closer.Close()
 		r.src = nil
 	}
 	return nil
 }
 
 type remoteReader struct {
-	req *http.Request
-	src io.ReadCloser
+	req        *http.Request
+	src        io.Reader
+	src_closer io.Closer
+	decrypter  Decrypter
 }
 
 func (r *remoteReader) Read(p []byte) (n int, err error) {
@@ -48,6 +59,13 @@ func (r *remoteReader) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 		r.src = res.Body
+		r.src_closer = res.Body
+		if r.decrypter != nil {
+			r.src, err = r.decrypter.Decrypt(r.src)
+			if err != nil {
+				return 0, err
+			}
+		}
 	}
 	c, err := r.src.Read(p)
 	return c, err
@@ -55,7 +73,7 @@ func (r *remoteReader) Read(p []byte) (n int, err error) {
 
 func (r *remoteReader) Close() error {
 	if r.src != nil {
-		r.src.Close()
+		r.src_closer.Close()
 		r.src = nil
 	}
 	return nil
