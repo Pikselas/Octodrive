@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 const (
@@ -30,62 +31,60 @@ type octoDrive struct {
 }
 
 func (drive *octoDrive) Create(path string, source io.Reader) error {
-	var Repository string
-	//make a new repository
-	Repository = ToOcto.RandomString(10)
-	status, err := drive.user.CreateRepository(Repository, "Repository for OctoDrive contents")
-	if err != nil {
-		return err
-	}
-	if status != http.StatusCreated {
-		return fmt.Errorf("error creating repository: %d", status)
-	}
-	fileID := ToOcto.RandomString(10)
-	paths := make([]string, 0)
-	paths = append(paths, Repository)
-	//create a multipart transferer with source limiter for max repository size
-	var reader SourceLimiter
 
-	var ContentSize uint64 = 0
+	//Generate FileID
+	fileID := ToOcto.RandomString(10)
+	filePaths := make([]string, 0)
+	fileSize := uint64(0)
 	for {
-		reader = NewSourceLimiter(source, MaxOctoRepoSize)
-		//create a new multipart transferer
-		transferer := ToOcto.NewMultiPartTransferer(drive.user, Repository, fileID, FileChunkSize, reader)
-		err = nil
-		for err != io.EOF {
-			_, _, err = transferer.TransferPart()
-			fmt.Println(err)
+		repoLimiter := NewSourceLimiter(source, MaxOctoRepoSize)
+		//make a new repository
+		Repository := ToOcto.RandomString(10)
+		status, err := drive.user.CreateRepository(Repository, "Repository for OctoDrive contents")
+		if err != nil {
+			return err
 		}
-		ContentSize += reader.GetCurrentSize()
-		if !reader.IsEOF() {
-			print("Creating new repository")
-			newRepo := ToOcto.RandomString(10)
-			status, err := drive.user.CreateRepository(newRepo, "Repository for OctoDrive contents")
+		if status != http.StatusCreated {
+			return fmt.Errorf("error creating repository: %d", status)
+		}
+		//create files
+		var fileCount int = 0
+		for {
+			chunkLimiter := NewSourceLimiter(repoLimiter, FileChunkSize)
+			buff := bytes.Buffer{}
+			enc := base64.NewEncoder(base64.StdEncoding, &buff)
+			encR := ToOcto.NewEncodedReader(chunkLimiter, enc, &buff, FileChunkSize)
+			stat, str, err := drive.user.Transfer(Repository, fileID+"/"+strconv.Itoa(fileCount), encR)
 			if err != nil {
 				return err
 			}
-			if status != http.StatusCreated {
-				return fmt.Errorf("error creating repository: %d", status)
+			if stat != http.StatusCreated {
+				return fmt.Errorf("error creating file: %d\n\n%s", stat, str)
 			}
-			paths = append(paths, newRepo)
-			Repository = newRepo
-		} else {
+			fileCount++
+			if chunkLimiter.IsEOF() {
+				break
+			}
+		}
+		filePaths = append(filePaths, Repository)
+		fileSize += repoLimiter.GetCurrentSize()
+		if repoLimiter.IsEOF() {
 			break
 		}
 	}
 	//create file details
-	FileDetails := fileDetails{Name: fileID, Paths: paths, Size: ContentSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize}
+	FileDetails := fileDetails{Name: fileID, Paths: filePaths, Size: fileSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize}
 	data, err := json.Marshal(FileDetails)
 	if err != nil {
 		return err
 	}
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(encoded, data)
-	_, Str, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(encoded))
+	Stat, _, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(encoded))
 	if err != nil {
 		return err
 	}
-	println(Str)
+	println(Stat)
 	return nil
 }
 
