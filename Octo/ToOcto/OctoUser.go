@@ -57,7 +57,8 @@ func (u *octoUser) CreateRepository(name string, description string) (int, error
 }
 
 func (u *octoUser) transfer(target string, body io.Reader, sha *string) (resp_code int, resp_string string, err error) {
-	body_formatter := BodyFormatter{reader: body, sha: sha, name: u.name, email: u.email}
+	b64reader := NewEncodedReader(body)
+	body_formatter := BodyFormatter{reader: b64reader, sha: sha, name: u.name, email: u.email}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &body_formatter)
 	if err != nil {
 		return

@@ -3,7 +3,6 @@ package Octo
 import (
 	"Octo/Octo/ToOcto"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -60,13 +59,10 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 			chunkLimiter := NewSourceLimiter(repoLimiter, FileChunkSize)
 			enc_dec := newAesEncDec(fileKey, fileIV)
 			encrypted_reader, err := enc_dec.Encrypt(chunkLimiter)
-			buff := bytes.Buffer{}
-			enc := base64.NewEncoder(base64.StdEncoding, &buff)
-			encR := ToOcto.NewEncodedReader(encrypted_reader, enc, &buff, MaxOctoRepoSize)
 			if err != nil {
 				return err
 			}
-			stat, str, err := drive.user.Transfer(Repository, fileID+"/"+strconv.Itoa(fileCount), encR)
+			stat, str, err := drive.user.Transfer(Repository, fileID+"/"+strconv.Itoa(fileCount), encrypted_reader)
 			if err != nil {
 				return err
 			}
@@ -93,9 +89,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 	if err != nil {
 		return err
 	}
-	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(encoded, data)
-	Stat, _, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(encoded))
+	Stat, _, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
