@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 )
 
 const (
@@ -20,8 +19,9 @@ const (
 )
 
 type OctoDrive interface {
-	Create(path string, source io.Reader) error
-	Load(path string) (OctoFile, error)
+	Create(source io.Reader) (*OctoFile, error)
+	Save(path string, of *OctoFile) error
+	Load(path string) (*OctoFile, error)
 	NewFileNavigator() (FileNavigator, error)
 }
 
@@ -29,63 +29,31 @@ type octoDrive struct {
 	user ToOcto.OctoUser
 }
 
-func (drive *octoDrive) Create(path string, source io.Reader) error {
+func (drive *octoDrive) Create(src io.Reader) (*OctoFile, error) {
+	file := new(OctoFile)
+	file.file.Name = ToOcto.RandomString(10)
+	file.file.ChunkSize = FileChunkSize
+	file.file.MaxRepoSize = MaxOctoRepoSize
+	file.file.Paths = make([]string, 0)
+	file.path_index = -1
+	file.src_data = src
+	file.user = drive.user
 
-	fileID := ToOcto.RandomString(10)
 	fileKey, err := generateKey(32)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fileIV, err := generateKey(16)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	filePaths := make([]string, 0)
-	fileSize := uint64(0)
-	for {
-		repoLimiter := NewSourceLimiter(source, MaxOctoRepoSize)
-		//make a new repository
-		Repository := ToOcto.RandomString(10)
-		status, err := drive.user.CreateRepository(Repository, "Repository for OctoDrive contents")
-		if err != nil {
-			return err
-		}
-		if status != http.StatusCreated {
-			return fmt.Errorf("error creating repository: %d", status)
-		}
-		//create files
-		var fileCount int = 0
-		for {
-			chunkLimiter := NewSourceLimiter(repoLimiter, FileChunkSize)
-			enc_dec := newAesEncDec(fileKey, fileIV)
-			encrypted_reader, err := enc_dec.Encrypt(chunkLimiter)
-			if err != nil {
-				return err
-			}
-			stat, str, err := drive.user.Transfer(Repository, fileID+"/"+strconv.Itoa(fileCount), encrypted_reader)
-			if err != nil {
-				return err
-			}
-			if stat != http.StatusCreated {
-				return fmt.Errorf("error creating file: %d\n\n%s", stat, str)
-			}
-			fileCount++
-			if chunkLimiter.IsEOF() {
-				break
-			}
-		}
-		filePaths = append(filePaths, Repository)
-		fileSize += repoLimiter.GetCurrentSize()
-		if repoLimiter.IsEOF() {
-			break
-		}
-	}
-	key := make([]byte, 48)
-	copy(key, fileKey)
-	copy(key[32:], fileIV)
-	//create file details
-	FileDetails := fileDetails{Name: fileID, Paths: filePaths, Size: fileSize, ChunkSize: FileChunkSize, MaxRepoSize: MaxOctoRepoSize, Key: key}
-	data, err := json.Marshal(FileDetails)
+	file.encrypter = newAesEncDec(fileKey, fileIV)
+	file.file.Key = append(fileKey, fileIV...)
+	return file, nil
+}
+
+func (drive *octoDrive) Save(path string, of *OctoFile) error {
+	data, err := json.Marshal(of.file)
 	if err != nil {
 		return err
 	}
@@ -97,7 +65,7 @@ func (drive *octoDrive) Create(path string, source io.Reader) error {
 	return nil
 }
 
-func (drive *octoDrive) Load(path string) (OctoFile, error) {
+func (drive *octoDrive) Load(path string) (*OctoFile, error) {
 	//get file details
 	req, err := drive.user.MakeRequest(http.MethodGet, OctoFileRegistry, "Contents/"+path, nil, true)
 	if err != nil {
@@ -110,7 +78,7 @@ func (drive *octoDrive) Load(path string) (OctoFile, error) {
 	defer res.Body.Close()
 	var FileDetails fileDetails
 	json.NewDecoder(res.Body).Decode(&FileDetails)
-	return &octoFile{file: FileDetails, user: drive.user}, nil
+	return &OctoFile{file: FileDetails, user: drive.user}, nil
 }
 
 func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {

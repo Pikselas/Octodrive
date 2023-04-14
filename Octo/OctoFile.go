@@ -2,17 +2,12 @@ package Octo
 
 import (
 	"Octo/Octo/ToOcto"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 )
-
-type OctoFile interface {
-	Get() (io.ReadCloser, error)
-	GetName() string
-	GetSize() uint64
-	GetBytes(from uint64, to uint64) (io.ReadCloser, error)
-}
 
 type LimiterCloser struct {
 	limiter io.Reader
@@ -27,20 +22,25 @@ func (lc *LimiterCloser) Close() error {
 	return lc.closer.Close()
 }
 
-type octoFile struct {
-	file fileDetails
-	user ToOcto.OctoUser
+type OctoFile struct {
+	file         fileDetails
+	user         ToOcto.OctoUser
+	src_data     io.Reader
+	repo_limiter SourceLimiter
+	path_index   int
+	chunk_index  int
+	encrypter    EncryptDecrypter
 }
 
-func (of *octoFile) GetName() string {
+func (of *OctoFile) GetName() string {
 	return of.file.Name
 }
 
-func (of *octoFile) GetSize() uint64 {
+func (of *OctoFile) GetSize() uint64 {
 	return of.file.Size
 }
 
-func (of *octoFile) Get() (io.ReadCloser, error) {
+func (of *OctoFile) Get() (io.ReadCloser, error) {
 	Rdrs := make([]io.ReadCloser, 0)
 	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
 	for _, repo := range of.file.Paths {
@@ -56,7 +56,7 @@ func (of *octoFile) Get() (io.ReadCloser, error) {
 	return &octoFileReader{readers: Rdrs, read_end: true}, nil
 }
 
-func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
+func (of *OctoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 	StartPathIndex := from / of.file.MaxRepoSize
 	EndPathIndex := to / of.file.MaxRepoSize
 	StartPartNo := from % of.file.MaxRepoSize / of.file.ChunkSize
@@ -129,4 +129,61 @@ func (of *octoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
 		readers:  Rdrs,
 		read_end: true,
 	}, nil
+}
+
+func (of *OctoFile) WriteChunk() error {
+	if of.src_data != nil {
+		println("VALID SOURCE")
+		if of.repo_limiter == nil {
+			println("CREATING REPOSITORY")
+			Repository := ToOcto.RandomString(10)
+			status, err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
+			if err != nil {
+				return err
+			}
+			if status != http.StatusCreated {
+				return errors.New("failed to create repository")
+			}
+			of.repo_limiter = NewSourceLimiter(of.src_data, of.file.MaxRepoSize)
+			of.file.Paths = append(of.file.Paths, Repository)
+			of.path_index++
+			of.chunk_index = 0
+		}
+		println("SETTING AND TRANSFERING")
+		chunked_src := NewSourceLimiter(of.repo_limiter, of.file.ChunkSize)
+		source, err := of.encrypter.Encrypt(chunked_src)
+		if err != nil {
+			return err
+		}
+		status, _, err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
+		if err != nil {
+			return err
+		}
+		if status != http.StatusCreated {
+			return errors.New("failed to upload chunk:" + strconv.Itoa(status))
+		}
+		of.file.Size += chunked_src.GetCurrentSize()
+		if of.repo_limiter.IsEOF() {
+			println("THE SOURCE DATA IS EMPTY")
+			of.repo_limiter = nil
+			of.src_data = nil
+		} else if chunked_src.IsEOF() {
+			println("THE REPOSITORY IS FULL")
+			of.repo_limiter = nil
+		}
+		of.chunk_index++
+	} else {
+		return io.EOF
+	}
+	return nil
+}
+
+func (of *OctoFile) WriteAll() error {
+	for {
+		err := of.WriteChunk()
+		println("Writing", err)
+		if err != nil {
+			return err
+		}
+	}
 }

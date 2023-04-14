@@ -25,19 +25,19 @@ func PrintIP() {
 	}
 }
 
-func StreamFile(of Octo.OctoFile, Type string) func(http.ResponseWriter, *http.Request) {
+func StreamFile(of *Octo.OctoFile, Type string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Request")
 		w.Header().Set("Content-Type", Type)
 		w.Header().Set("Accept-Ranges", "bytes")
 		byteRange := r.Header.Get("Range")
 		parsedStart := int64(0)
-		bSplt := strings.Split(byteRange, "=")
-		if len(bSplt) == 2 {
-			bSplt = strings.Split(bSplt[1], "-")
-			if len(bSplt) == 2 {
+		bSplit := strings.Split(byteRange, "=")
+		if len(bSplit) == 2 {
+			bSplit = strings.Split(bSplit[1], "-")
+			if len(bSplit) == 2 {
 				var err error
-				parsedStart, err = strconv.ParseInt(bSplt[0], 10, 64)
+				parsedStart, err = strconv.ParseInt(bSplit[0], 10, 64)
 				if err != nil {
 					panic(err)
 				}
@@ -49,21 +49,19 @@ func StreamFile(of Octo.OctoFile, Type string) func(http.ResponseWriter, *http.R
 		} else {
 			w.Header().Set("Content-Length", fmt.Sprint(of.GetSize()))
 		}
-		fmt.Println("Getting", uint64(parsedStart), of.GetSize(), parsedStart)
+		fmt.Println("Getting", parsedStart, of.GetSize(), parsedStart)
 		re, err := of.GetBytes(uint64(parsedStart), of.GetSize())
 		if err != nil {
 			panic(err)
 		}
+		defer re.Close()
 		fmt.Println("Sending")
 		io.Copy(w, re)
+		fmt.Println("Sent")
 	}
 }
 
-func main() {
-	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
-	if err != nil {
-		panic(err)
-	}
+func MakeFileServer(drive Octo.OctoDrive) {
 	fn, err := drive.NewFileNavigator()
 	if err != nil {
 		panic(err)
@@ -83,4 +81,29 @@ func main() {
 		}
 	}
 	http.ListenAndServe(":8080", nil)
+}
+
+func main() {
+	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
+	if err != nil {
+		panic(err)
+	}
+	file, err := os.Open("D:/Live pattern test.mp4")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	oFile, err := drive.Create(file)
+	if err != nil {
+		panic(err)
+	}
+	err = oFile.WriteAll()
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+	err = drive.Save("file4.mp4", oFile)
+	if err != nil {
+		panic(err)
+	}
+	MakeFileServer(drive)
 }
