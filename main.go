@@ -85,6 +85,7 @@ func MakeFileServer(drive Octo.OctoDrive) {
 
 func main() {
 	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
+
 	if err != nil {
 		panic(err)
 	}
@@ -97,11 +98,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = oFile.WriteAll()
-	if err != nil && err != io.EOF {
-		panic(err)
+	for {
+		err := oFile.WriteAll()
+		if err == nil || err == io.EOF {
+			break
+		}
+		fmt.Println("\nRETRYING....\n", err)
+		err = oFile.RetryWriteChunk()
+		for err != nil && err != io.EOF {
+			err = oFile.RetryWriteChunk()
+			fmt.Println("ERR", err)
+		}
 	}
-	err = drive.Save("file4.mp4", oFile)
+	err = drive.Save("LiveTex.mp4", oFile)
 	if err != nil {
 		panic(err)
 	}

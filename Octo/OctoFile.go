@@ -23,13 +23,14 @@ func (lc *LimiterCloser) Close() error {
 }
 
 type OctoFile struct {
-	file         fileDetails
-	user         ToOcto.OctoUser
-	src_data     io.Reader
-	repo_limiter SourceLimiter
-	path_index   int
-	chunk_index  int
-	encrypter    EncryptDecrypter
+	file             fileDetails
+	user             ToOcto.OctoUser
+	src_data         io.Reader
+	cached_src_chunk *CachedReader
+	repo_limiter     SourceLimiter
+	path_index       int
+	chunk_index      int
+	encrypter        EncryptDecrypter
 }
 
 func (of *OctoFile) GetName() string {
@@ -151,17 +152,46 @@ func (of *OctoFile) WriteChunk() error {
 		}
 		println("SETTING AND TRANSFERING")
 		chunked_src := NewSourceLimiter(of.repo_limiter, of.file.ChunkSize)
-		source, err := of.encrypter.Encrypt(chunked_src)
+		if of.cached_src_chunk != nil {
+			of.cached_src_chunk.Dispose()
+		}
+		cached_chunk, err := NewCachedReader(chunked_src)
+		of.cached_src_chunk = cached_chunk
+		if err != nil {
+			return err
+		}
+		source, err := of.encrypter.Encrypt(cached_chunk)
 		if err != nil {
 			return err
 		}
 		status, _, err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
 		if err != nil {
+			io.Copy(io.Discard, cached_chunk)
+			of.file.Size += chunked_src.GetCurrentSize()
+			if of.repo_limiter.IsEOF() {
+				println("THE SOURCE DATA IS EMPTY")
+				of.repo_limiter = nil
+				of.src_data = nil
+			} else if chunked_src.IsEOF() {
+				println("THE REPOSITORY IS FULL")
+				of.repo_limiter = nil
+			}
 			return err
 		}
 		if status != http.StatusCreated {
+			io.Copy(io.Discard, cached_chunk)
+			of.file.Size += chunked_src.GetCurrentSize()
+			if of.repo_limiter.IsEOF() {
+				println("THE SOURCE DATA IS EMPTY")
+				of.repo_limiter = nil
+				of.src_data = nil
+			} else if chunked_src.IsEOF() {
+				println("THE REPOSITORY IS FULL")
+				of.repo_limiter = nil
+			}
 			return errors.New("failed to upload chunk:" + strconv.Itoa(status))
 		}
+		of.cached_src_chunk.Dispose()
 		of.file.Size += chunked_src.GetCurrentSize()
 		if of.repo_limiter.IsEOF() {
 			println("THE SOURCE DATA IS EMPTY")
@@ -174,6 +204,25 @@ func (of *OctoFile) WriteChunk() error {
 		of.chunk_index++
 	} else {
 		return io.EOF
+	}
+	return nil
+}
+
+func (of *OctoFile) RetryWriteChunk() error {
+	if of.cached_src_chunk != nil {
+		of.cached_src_chunk.Reset()
+		source, err := of.encrypter.Encrypt(of.cached_src_chunk)
+		if err != nil {
+			return err
+		}
+		status, _, err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
+		if err != nil {
+			return err
+		}
+		if status != http.StatusCreated {
+			return errors.New("failed to upload chunk:" + strconv.Itoa(status))
+		}
+		of.chunk_index++
 	}
 	return nil
 }
