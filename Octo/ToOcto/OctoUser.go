@@ -10,11 +10,11 @@ import (
 )
 
 type OctoUser interface {
-	CreateRepository(name string, description string) (int, error)
+	CreateRepository(name string, description string) *Error
 	MakeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Request, error)
-	GetContent(repo string, path string) (io.ReadCloser, error)
-	Transfer(repo string, path string, body io.Reader) (resp_code int, resp_string string, err error)
-	Update(repo string, path string, data io.Reader) (resp_code int, resp_string string, err error)
+	GetContent(repo string, path string) (io.ReadCloser, *Error)
+	Transfer(repo string, path string, body io.Reader) *Error
+	Update(repo string, path string, data io.Reader) *Error
 }
 
 type octoUser struct {
@@ -38,86 +38,100 @@ func (u *octoUser) MakeRequest(method string, repo string, path string, body io.
 	return rq, err
 }
 
-func (u *octoUser) CreateRepository(name string, description string) (int, error) {
+func (u *octoUser) CreateRepository(name string, description string) *Error {
 	data := bytes.NewBufferString(fmt.Sprintf(`{"name": "%s",
 	"description": "%s",
 	"homepage": null,
 	"private": true}`, name, description))
 	rq, err := http.NewRequest(http.MethodPost, "https://api.github.com/user/repos", data)
 	if err != nil {
-		return 0, err
+		return NewError(ErrorCreatingRepository, 0, nil, err)
 	}
 	rq.Header.Add("Authorization", "token "+u.token)
 	res, err := http.DefaultClient.Do(rq)
 	if err != nil {
-		return 0, err
+		return NewError(ErrorCreatingRepository, 0, nil, err)
 	}
 	defer res.Body.Close()
-	return res.StatusCode, nil
+	if res.StatusCode != http.StatusCreated {
+		return NewError(ErrorCreatingRepository, res.StatusCode, res.Body, nil)
+	}
+	return nil
 }
 
-func (u *octoUser) transfer(target string, body io.Reader, sha *string) (resp_code int, resp_string string, err error) {
+func (u *octoUser) transfer(target string, body io.Reader, sha *string) *Error {
 	b64reader := NewEncodedReader(body)
 	body_formatter := BodyFormatter{reader: b64reader, sha: sha, name: u.name, email: u.email}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &body_formatter)
 	if err != nil {
-		return
+		return NewError(ErrorTransferring, 0, nil, err)
 	}
 	GithubReq.Header.Add("Accept", "application/vnd.github+json")
 	GithubReq.Header.Add("Authorization", "Bearer "+u.token)
 	GithubResp, err := u.client.Do(GithubReq)
 	if err != nil {
-		return
+		return NewError(ErrorTransferring, 0, nil, err)
 	}
 	defer GithubResp.Body.Close()
-	resp_byte, err := io.ReadAll(GithubResp.Body)
-	return GithubResp.StatusCode, string(resp_byte), err
+	if GithubResp.StatusCode != http.StatusCreated && GithubResp.StatusCode != http.StatusOK {
+		return NewError(ErrorTransferring, GithubResp.StatusCode, GithubResp.Body, nil)
+	}
+	return nil
 }
 
-func (u *octoUser) Transfer(repo string, path string, body io.Reader) (resp_code int, resp_string string, err error) {
+func (u *octoUser) Transfer(repo string, path string, body io.Reader) *Error {
 	return u.transfer(getOctoURL(u.name, repo, path), body, nil)
 }
 
 // Updating File is expensive , Should only be done for small files
-func (u *octoUser) Update(repo string, path string, data io.Reader) (resp_code int, resp_string string, err error) {
+func (u *octoUser) Update(repo string, path string, data io.Reader) *Error {
 	target := getOctoURL(u.name, repo, path)
 	//get the sha of the file
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
-		return
+		return NewError(ErrorUpdating, 0, nil, err)
 	}
 	req.Header.Add("Accept", "application/vnd.github+json")
 	req.Header.Add("Authorization", "Bearer "+u.token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return
+		return NewError(ErrorUpdating, 0, nil, err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return NewError(ErrorUpdating, resp.StatusCode, resp.Body, nil)
+	}
 	var JsonData map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&JsonData)
 	if err != nil {
-		return
+		return NewError(ErrorUpdating, 0, nil, err)
 	}
 	sha, ok := JsonData["sha"]
 	if ok {
 		SHA := sha.(string)
 		return u.transfer(target, data, &SHA)
 	}
-	return 0, "", errors.New("no SHA found")
+	return NewError(ErrorUpdating, 0, nil, errors.New("SHA not found"))
 }
 
-func (u *octoUser) GetContent(repo string, path string) (io.ReadCloser, error) {
+func (u *octoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) {
 	rq, err := u.MakeRequest(http.MethodGet, repo, path, nil, true)
 	if err != nil {
-		return nil, err
+		return nil, NewError(ErrorGettingContent, 0, nil, err)
 	}
 	res, err := u.client.Do(rq)
 	if err != nil {
-		return nil, err
+		return nil, NewError(ErrorGettingContent, 0, nil, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		defer res.Body.Close()
+		return nil, NewError(ErrorGettingContent, res.StatusCode, res.Body, nil)
 	}
 	return res.Body, nil
 }
 
-func NewOctoUser(name string, email string, token string) (OctoUser, error) {
-	return &octoUser{name: name, email: email, token: token, client: &http.Client{}}, nil
+func NewOctoUser(name string, email string, token string) OctoUser {
+	user := new(octoUser)
+	*user = octoUser{name: name, email: email, token: token, client: &http.Client{}}
+	return user
 }

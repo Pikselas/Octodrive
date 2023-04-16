@@ -4,7 +4,6 @@ import (
 	"Octo/Octo/ToOcto"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 )
@@ -57,11 +56,10 @@ func (drive *octoDrive) Save(path string, of *OctoFile) error {
 	if err != nil {
 		return err
 	}
-	Stat, _, err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(data))
-	if err != nil {
+	Err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(data))
+	if Err != nil {
 		return err
 	}
-	println(Stat)
 	return nil
 }
 
@@ -86,17 +84,14 @@ func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {
 }
 
 func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
-	oU, err := ToOcto.NewOctoUser(User, Mail, Token)
-	if err != nil {
-		return nil, err
-	}
+	oU := ToOcto.NewOctoUser(User, Mail, Token)
 	od := octoDrive{user: oU}
-	status, err := oU.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
+	err := oU.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
 	if err != nil {
-		return nil, err
+		stat := err.StatusCode()
+		if stat != http.StatusCreated && stat != http.StatusUnprocessableEntity {
+			return nil, err
+		}
 	}
-	if status != http.StatusCreated && status != http.StatusUnprocessableEntity {
-		return nil, fmt.Errorf("error creating repository: %d", status)
-	}
-	return &od, err
+	return &od, nil
 }

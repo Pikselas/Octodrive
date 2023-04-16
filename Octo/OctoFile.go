@@ -2,7 +2,6 @@ package Octo
 
 import (
 	"Octo/Octo/ToOcto"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -138,12 +137,9 @@ func (of *OctoFile) WriteChunk() error {
 		if of.repo_limiter == nil {
 			println("CREATING REPOSITORY")
 			Repository := ToOcto.RandomString(10)
-			status, err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
-			if err != nil {
-				return err
-			}
-			if status != http.StatusCreated {
-				return errors.New("failed to create repository")
+			Err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
+			if Err != nil {
+				return Err
 			}
 			of.repo_limiter = NewSourceLimiter(of.src_data, of.file.MaxRepoSize)
 			of.file.Paths = append(of.file.Paths, Repository)
@@ -164,8 +160,8 @@ func (of *OctoFile) WriteChunk() error {
 		if err != nil {
 			return err
 		}
-		status, _, err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
-		if err != nil {
+		Err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
+		if Err != nil {
 			io.Copy(io.Discard, cached_chunk)
 			of.file.Size += chunked_src.GetCurrentSize()
 			if of.repo_limiter.IsEOF() {
@@ -176,20 +172,7 @@ func (of *OctoFile) WriteChunk() error {
 				println("THE REPOSITORY IS FULL")
 				of.repo_limiter = nil
 			}
-			return err
-		}
-		if status != http.StatusCreated {
-			io.Copy(io.Discard, cached_chunk)
-			of.file.Size += chunked_src.GetCurrentSize()
-			if of.repo_limiter.IsEOF() {
-				println("THE SOURCE DATA IS EMPTY")
-				of.repo_limiter = nil
-				of.src_data = nil
-			} else if chunked_src.IsEOF() {
-				println("THE REPOSITORY IS FULL")
-				of.repo_limiter = nil
-			}
-			return errors.New("failed to upload chunk:" + strconv.Itoa(status))
+			return Err
 		}
 		of.cached_src_chunk.Dispose()
 		of.file.Size += chunked_src.GetCurrentSize()
@@ -209,22 +192,20 @@ func (of *OctoFile) WriteChunk() error {
 }
 
 func (of *OctoFile) RetryWriteChunk() error {
+	var Err *ToOcto.Error
 	if of.cached_src_chunk != nil {
 		of.cached_src_chunk.Reset()
 		source, err := of.encrypter.Encrypt(of.cached_src_chunk)
 		if err != nil {
 			return err
 		}
-		status, _, err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
-		if err != nil {
-			return err
-		}
-		if status != http.StatusCreated {
-			return errors.New("failed to upload chunk:" + strconv.Itoa(status))
+		Err = of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
+		if Err != nil {
+			return Err
 		}
 		of.chunk_index++
 	}
-	return nil
+	return Err
 }
 
 func (of *OctoFile) WriteAll() error {
