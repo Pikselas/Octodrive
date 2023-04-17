@@ -85,7 +85,6 @@ func MakeFileServer(drive Octo.OctoDrive) {
 
 func main() {
 	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
-
 	if err != nil {
 		panic(err)
 	}
@@ -98,19 +97,30 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for {
-		err := oFile.WriteAll()
-		if err == nil || err == io.EOF {
-			break
-		}
-		fmt.Println("\nRETRYING....\n", err)
-		err = oFile.RetryWriteChunk()
-		for err != nil && err != io.EOF {
-			err = oFile.RetryWriteChunk()
-			fmt.Println("ERR", err)
-		}
+	err = oFile.WriteChunk()
+	if err != nil && err != io.EOF {
+		panic(err)
 	}
-	err = drive.Save("LiveTex.mp4", oFile)
+	fmt.Println("COMPLETED WRITING")
+	err = drive.Save("file4.mp4", oFile)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("SAVED FILE")
+	oFile, err = drive.Load("file4.mp4")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("LOADED FILE")
+	err = Octo.EnableFileWrite(oFile, file)
+	if err != nil {
+		panic(err)
+	}
+	err = oFile.WriteAll()
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+	err = drive.Update("file4.mp4", oFile)
 	if err != nil {
 		panic(err)
 	}

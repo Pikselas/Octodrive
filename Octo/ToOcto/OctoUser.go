@@ -52,10 +52,10 @@ func (u *octoUser) CreateRepository(name string, description string) *Error {
 	if err != nil {
 		return NewError(ErrorCreatingRepository, 0, nil, err)
 	}
-	defer res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
 		return NewError(ErrorCreatingRepository, res.StatusCode, res.Body, nil)
 	}
+	res.Body.Close()
 	return nil
 }
 
@@ -72,10 +72,10 @@ func (u *octoUser) transfer(target string, body io.Reader, sha *string) *Error {
 	if err != nil {
 		return NewError(ErrorTransferring, 0, nil, err)
 	}
-	defer GithubResp.Body.Close()
 	if GithubResp.StatusCode != http.StatusCreated && GithubResp.StatusCode != http.StatusOK {
 		return NewError(ErrorTransferring, GithubResp.StatusCode, GithubResp.Body, nil)
 	}
+	GithubResp.Body.Close()
 	return nil
 }
 
@@ -124,7 +124,6 @@ func (u *octoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) 
 		return nil, NewError(ErrorGettingContent, 0, nil, err)
 	}
 	if res.StatusCode != http.StatusOK {
-		defer res.Body.Close()
 		return nil, NewError(ErrorGettingContent, res.StatusCode, res.Body, nil)
 	}
 	return res.Body, nil

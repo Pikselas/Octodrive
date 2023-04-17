@@ -64,7 +64,7 @@ func (e *Error) ErrorReason() uint {
 	return e.errorReason
 }
 
-func NewError(err_type uint, status_code int, body io.Reader, optionalErr error) *Error {
+func NewError(err_type uint, status_code int, body io.ReadCloser, optionalErr error) *Error {
 	var err_reason uint
 	var err_string error
 
@@ -100,10 +100,11 @@ func NewError(err_type uint, status_code int, body io.Reader, optionalErr error)
 		if err != nil {
 			err_string = fmt.Errorf("%s **Error reading body** %s", err_string, err)
 		}
+		body.Close()
 	}
 
 	if optionalErr != nil {
-		err_string = fmt.Errorf("%s: %s", err_string, optionalErr)
+		err_string = errors.Join(err_string, optionalErr)
 	}
 
 	newErr := new(Error)
