@@ -40,9 +40,10 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 	if r.current_source == nil {
-		r.current_source, err = r.user.GetContent(r.repo, r.path+"/"+strconv.Itoa(r.current_count))
-		if err != nil {
-			return 0, err
+		var Err *ToOcto.Error
+		r.current_source, Err = r.user.GetContent(r.repo, r.path+"/"+strconv.Itoa(r.current_count))
+		if Err != nil {
+			return 0, Err
 		}
 		if r.decrypter != nil {
 			r.current_source, err = r.decrypter.Decrypt(r.current_source)
@@ -90,17 +91,20 @@ func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) 
 }
 
 func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_count int, dec Decrypter) OctoMultiPartReader {
-	return &reader{
+	r := new(reader)
+	*r = reader{
 		repo:      Repo,
 		path:      Path,
 		user:      User,
 		max_count: part_count,
 		decrypter: dec,
 	}
+	return r
 }
 
 func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int, dec Decrypter) OctoMultiPartReader {
-	return &reader{
+	r := new(reader)
+	*r = reader{
 		repo:          Repo,
 		path:          Path,
 		user:          User,
@@ -108,4 +112,5 @@ func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, par
 		max_count:     part_end,
 		decrypter:     dec,
 	}
+	return r
 }
