@@ -1,7 +1,6 @@
 package Octo
 
 import (
-	"Octo/Octo/ToOcto"
 	"io"
 	"os"
 )
@@ -38,7 +37,7 @@ func (cr *CachedReader) Read(p []byte) (int, error) {
 
 func NewCachedReader(reader io.Reader) (*CachedReader, error) {
 	cr := new(CachedReader)
-	cr.cached_file_name = ToOcto.RandomString(5)
+	cr.cached_file_name = RandomString(5)
 	file, err := os.Create(cr.cached_file_name)
 	if err != nil {
 		return nil, err

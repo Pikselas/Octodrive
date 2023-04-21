@@ -1,4 +1,4 @@
-package ToOcto
+package Octo
 
 import (
 	"encoding/base64"

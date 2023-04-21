@@ -50,18 +50,19 @@ func StreamFile(of *Octo.OctoFile, Type string) func(http.ResponseWriter, *http.
 			w.Header().Set("Content-Length", fmt.Sprint(of.GetSize()))
 		}
 		fmt.Println("Getting", parsedStart, of.GetSize(), parsedStart)
-		re, err := of.GetBytes(uint64(parsedStart), of.GetSize())
+		re, err := of.GetSeekReader()
 		if err != nil {
 			panic(err)
 		}
+		re.Seek(parsedStart, io.SeekStart)
 		defer re.Close()
 		fmt.Println("Sending")
-		io.Copy(w, re)
-		fmt.Println("Sent")
+		n, err := io.Copy(w, re)
+		fmt.Println("Sent", n, err)
 	}
 }
 
-func MakeFileServer(drive Octo.OctoDrive) {
+func MakeFileServer(drive *Octo.OctoDrive) {
 	fn, err := drive.NewFileNavigator()
 	if err != nil {
 		panic(err)
@@ -85,42 +86,6 @@ func MakeFileServer(drive Octo.OctoDrive) {
 
 func main() {
 	drive, err := Octo.NewOctoDrive("Pikselas", os.Getenv("OCTODRIVE_MAIL"), os.Getenv("OCTODRIVE_TOKEN"))
-	if err != nil {
-		panic(err)
-	}
-	file, err := os.Open("D:/Live pattern test.mp4")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	oFile, err := drive.Create(file)
-	if err != nil {
-		panic(err)
-	}
-	err = oFile.WriteChunk()
-	if err != nil && err != io.EOF {
-		panic(err)
-	}
-	fmt.Println("COMPLETED WRITING")
-	err = drive.Save("file4.mp4", oFile)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("SAVED FILE")
-	oFile, err = drive.Load("file4.mp4")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("LOADED FILE")
-	err = Octo.EnableFileWrite(oFile, file)
-	if err != nil {
-		panic(err)
-	}
-	err = oFile.WriteAll()
-	if err != nil && err != io.EOF {
-		panic(err)
-	}
-	err = drive.Update("file4.mp4", oFile)
 	if err != nil {
 		panic(err)
 	}

@@ -1,11 +1,11 @@
 package Octo
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 )
 
+// discards bytes from src until the target is reached
 type delayedReader struct {
 	req         *http.Request
 	src         io.Reader
@@ -28,11 +28,10 @@ func (r *delayedReader) Read(p []byte) (n int, err error) {
 				return 0, err
 			}
 		}
-		n, err := io.CopyN(io.Discard, r.src, int64(r.ignoreBytes))
+		_, err = io.CopyN(io.Discard, r.src, int64(r.ignoreBytes))
 		if err != nil {
 			return 0, err
 		}
-		fmt.Println("Ignored:", n)
 	}
 	return r.src.Read(p)
 }
@@ -45,6 +44,7 @@ func (r *delayedReader) Close() error {
 	return nil
 }
 
+// reads from a remote source (opens a new connection at first time)
 type remoteReader struct {
 	req        *http.Request
 	src        io.Reader
@@ -79,6 +79,7 @@ func (r *remoteReader) Close() error {
 	return nil
 }
 
+// reads data from the array of readers (octofile chunks)
 type octoFileReader struct {
 	readers            []io.ReadCloser
 	current_read_index uint

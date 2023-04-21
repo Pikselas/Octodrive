@@ -21,7 +21,7 @@ type OctoMultiPartReader interface {
 type reader struct {
 	repo               string
 	path               string
-	user               ToOcto.OctoUser
+	user               *ToOcto.OctoUser
 	max_count          int
 	current_count      int
 	current_read_count int
@@ -75,7 +75,7 @@ func (r *reader) Close() error {
 	return nil
 }
 
-func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) {
+func getPartCount(User *ToOcto.OctoUser, Repo string, Path string) (uint, error) {
 	req, err := User.MakeRequest(http.MethodGet, Repo, Path, nil, false)
 	if err != nil {
 		return 0, err
@@ -90,7 +90,7 @@ func getPartCount(User ToOcto.OctoUser, Repo string, Path string) (uint, error) 
 	return uint(len(jArr)), nil
 }
 
-func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_count int, dec Decrypter) OctoMultiPartReader {
+func NewMultipartReader(User *ToOcto.OctoUser, Repo string, Path string, part_count int, dec Decrypter) OctoMultiPartReader {
 	r := new(reader)
 	*r = reader{
 		repo:      Repo,
@@ -102,7 +102,7 @@ func NewMultipartReader(User ToOcto.OctoUser, Repo string, Path string, part_cou
 	return r
 }
 
-func NewMultipartRangeReader(User ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int, dec Decrypter) OctoMultiPartReader {
+func NewMultipartRangeReader(User *ToOcto.OctoUser, Repo string, Path string, part_start int, part_end int, dec Decrypter) OctoMultiPartReader {
 	r := new(reader)
 	*r = reader{
 		repo:          Repo,

@@ -9,22 +9,20 @@ import (
 	"net/http"
 )
 
-type OctoUser interface {
-	CreateRepository(name string, description string) *Error
-	MakeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Request, error)
-	GetContent(repo string, path string) (io.ReadCloser, *Error)
-	Transfer(repo string, path string, body io.Reader) *Error
-	Update(repo string, path string, data io.Reader) *Error
-}
+/*
+ Interface that wraps the basic methods of a user.
+*/
 
-type octoUser struct {
+type OctoUser struct {
 	name   string
 	email  string
 	token  string
 	client *http.Client
 }
 
-func (u *octoUser) MakeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Request, error) {
+// Returns *http.Request for the given method, repo and path.
+// If is_raw is true, the request is made for raw data.
+func (u *OctoUser) MakeRequest(method string, repo string, path string, body io.Reader, is_raw bool) (*http.Request, error) {
 	rq, err := http.NewRequest(method, getOctoURL(u.name, repo, path), body)
 	if err != nil {
 		return nil, err
@@ -38,7 +36,8 @@ func (u *octoUser) MakeRequest(method string, repo string, path string, body io.
 	return rq, err
 }
 
-func (u *octoUser) CreateRepository(name string, description string) *Error {
+// Creates a new repository with the given name and description.
+func (u *OctoUser) CreateRepository(name string, description string) *Error {
 	data := bytes.NewBufferString(fmt.Sprintf(`{"name": "%s",
 	"description": "%s",
 	"homepage": null,
@@ -59,7 +58,9 @@ func (u *octoUser) CreateRepository(name string, description string) *Error {
 	return nil
 }
 
-func (u *octoUser) transfer(target string, body io.Reader, sha *string) *Error {
+// transfers data to the target path.
+// If sha is not nil, the data is transferred to the given sha.
+func (u *OctoUser) transfer(target string, body io.Reader, sha *string) *Error {
 	b64reader := NewEncodedReader(body)
 	body_formatter := BodyFormatter{reader: b64reader, sha: sha, name: u.name, email: u.email}
 	GithubReq, err := http.NewRequest(http.MethodPut, target, &body_formatter)
@@ -79,12 +80,14 @@ func (u *octoUser) transfer(target string, body io.Reader, sha *string) *Error {
 	return nil
 }
 
-func (u *octoUser) Transfer(repo string, path string, body io.Reader) *Error {
+// Creates a new file in the given repository.
+func (u *OctoUser) Transfer(repo string, path string, body io.Reader) *Error {
 	return u.transfer(getOctoURL(u.name, repo, path), body, nil)
 }
 
+// Updates the file in the given repository.
 // Updating File is expensive , Should only be done for small files
-func (u *octoUser) Update(repo string, path string, data io.Reader) *Error {
+func (u *OctoUser) Update(repo string, path string, data io.Reader) *Error {
 	target := getOctoURL(u.name, repo, path)
 	//get the sha of the file
 	req, err := http.NewRequest(http.MethodGet, target, nil)
@@ -114,7 +117,8 @@ func (u *octoUser) Update(repo string, path string, data io.Reader) *Error {
 	return NewError(ErrorUpdating, 0, nil, errors.New("SHA not found"))
 }
 
-func (u *octoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) {
+// Gets the content of the file from the given repository.
+func (u *OctoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) {
 	rq, err := u.MakeRequest(http.MethodGet, repo, path, nil, true)
 	if err != nil {
 		return nil, NewError(ErrorGettingContent, 0, nil, err)
@@ -129,8 +133,9 @@ func (u *octoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) 
 	return res.Body, nil
 }
 
-func NewOctoUser(name string, email string, token string) OctoUser {
-	user := new(octoUser)
-	*user = octoUser{name: name, email: email, token: token, client: &http.Client{}}
+// Creates a new user with the given name, email and token.
+func NewOctoUser(name string, email string, token string) *OctoUser {
+	user := new(OctoUser)
+	*user = OctoUser{name: name, email: email, token: token, client: &http.Client{}}
 	return user
 }

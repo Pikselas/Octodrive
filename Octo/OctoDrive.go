@@ -18,21 +18,15 @@ const (
 	MaxOctoRepoSize = FileChunkSize * 30 * 2
 )
 
-type OctoDrive interface {
-	Create(source io.Reader) (*OctoFile, error)
-	Save(path string, of *OctoFile) error
-	Update(path string, of *OctoFile) error
-	Load(path string) (*OctoFile, error)
-	NewFileNavigator() (FileNavigator, error)
+// OctoDrive stores files to GitHub
+type OctoDrive struct {
+	user *ToOcto.OctoUser
 }
 
-type octoDrive struct {
-	user ToOcto.OctoUser
-}
-
-func (drive *octoDrive) Create(src io.Reader) (*OctoFile, error) {
+// Creates a new file
+func (drive *OctoDrive) Create(src io.Reader) (*OctoFile, error) {
 	file := new(OctoFile)
-	file.file.Name = ToOcto.RandomString(10)
+	file.file.Name = RandomString(10)
 	file.file.ChunkSize = FileChunkSize
 	file.file.MaxRepoSize = MaxOctoRepoSize
 	file.file.Paths = make([]string, 0)
@@ -53,7 +47,8 @@ func (drive *octoDrive) Create(src io.Reader) (*OctoFile, error) {
 	return file, nil
 }
 
-func (drive *octoDrive) Load(path string) (*OctoFile, error) {
+// Loads a file from path
+func (drive *OctoDrive) Load(path string) (*OctoFile, error) {
 	//get file details
 	req, err := drive.user.MakeRequest(http.MethodGet, OctoFileRegistry, "Contents/"+path, nil, true)
 	if err != nil {
@@ -72,7 +67,8 @@ func (drive *octoDrive) Load(path string) (*OctoFile, error) {
 	return Of, nil
 }
 
-func (drive *octoDrive) Save(path string, of *OctoFile) error {
+// Saves a file to path
+func (drive *OctoDrive) Save(path string, of *OctoFile) error {
 	data, err := json.Marshal(of.file)
 	if err != nil {
 		return err
@@ -84,7 +80,8 @@ func (drive *octoDrive) Save(path string, of *OctoFile) error {
 	return nil
 }
 
-func (dive *octoDrive) Update(path string, of *OctoFile) error {
+// Updates a file at path
+func (dive *OctoDrive) Update(path string, of *OctoFile) error {
 	data, err := json.Marshal(of.file)
 	if err != nil {
 		return err
@@ -96,13 +93,16 @@ func (dive *octoDrive) Update(path string, of *OctoFile) error {
 	return nil
 }
 
-func (drive *octoDrive) NewFileNavigator() (FileNavigator, error) {
+// Creates a new file navigator
+func (drive *OctoDrive) NewFileNavigator() (*FileNavigator, error) {
 	return NewFileNavigator(drive.user, OctoFileRegistry, "Contents")
 }
 
-func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
+// Creates a new OctoDrive
+func NewOctoDrive(User string, Mail string, Token string) (*OctoDrive, error) {
 	oU := ToOcto.NewOctoUser(User, Mail, Token)
-	od := octoDrive{user: oU}
+	od := new(OctoDrive)
+	*od = OctoDrive{user: oU}
 	err := oU.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
 	if err != nil {
 		stat := err.StatusCode()
@@ -110,9 +110,10 @@ func NewOctoDrive(User string, Mail string, Token string) (OctoDrive, error) {
 			return nil, err
 		}
 	}
-	return &od, nil
+	return od, nil
 }
 
+// Enables a loaded file for writing
 func EnableFileWrite(file *OctoFile, src io.Reader) error {
 	if file == nil {
 		return errors.New("file is nil")

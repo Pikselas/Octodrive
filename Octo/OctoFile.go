@@ -8,6 +8,7 @@ import (
 	"strconv"
 )
 
+// closes a SourceLimiter
 type LimiterCloser struct {
 	limiter io.Reader
 	closer  io.Closer
@@ -21,9 +22,10 @@ func (lc *LimiterCloser) Close() error {
 	return lc.closer.Close()
 }
 
+// Represents a file in OctoDrive
 type OctoFile struct {
 	file             fileDetails
-	user             ToOcto.OctoUser
+	user             *ToOcto.OctoUser
 	src_data         io.Reader
 	cached_src_chunk *CachedReader
 	repo_limiter     SourceLimiter
@@ -32,14 +34,12 @@ type OctoFile struct {
 	encrypter        EncryptDecrypter
 }
 
-func (of *OctoFile) GetName() string {
-	return of.file.Name
-}
-
+// returns size of the file
 func (of *OctoFile) GetSize() uint64 {
 	return of.file.Size
 }
 
+// represents ReadSeekCloser for OctoFile
 type rd_sk_closer struct {
 	current_pos uint64
 	file        *OctoFile
@@ -52,6 +52,9 @@ func (rsc *rd_sk_closer) Read(p []byte) (n int, err error) {
 	return
 }
 
+// seeks to the specified position
+// whence can be io.SeekStart, io.SeekCurrent, io.SeekEnd
+// returns the new position and error
 func (rsc *rd_sk_closer) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	case io.SeekStart:
@@ -70,10 +73,12 @@ func (rsc *rd_sk_closer) Close() error {
 	return rsc.read_closer.Close()
 }
 
+// returns a io.ReadSeekCloser for the file
 func (of *OctoFile) GetSeekReader() (io.ReadSeekCloser, error) {
 	return &rd_sk_closer{file: of, current_pos: 0}, nil
 }
 
+// returns a io.ReadCloser for the file
 func (of *OctoFile) GetReader() (io.ReadCloser, error) {
 	Rdrs := make([]io.ReadCloser, 0)
 	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
@@ -90,6 +95,7 @@ func (of *OctoFile) GetReader() (io.ReadCloser, error) {
 	return &octoFileReader{readers: Rdrs, read_end: true}, nil
 }
 
+// returns a io.ReadCloser for the file from the specified position to the specified end position
 func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error) {
 	StartPathIndex := from / of.file.MaxRepoSize
 	EndPathIndex := to / of.file.MaxRepoSize
@@ -163,12 +169,12 @@ func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error
 	}, nil
 }
 
+// Writes a chunk of data to the file
 func (of *OctoFile) WriteChunk() error {
 	if of.src_data != nil {
 		println("VALID SOURCE")
 		if of.repo_limiter == nil {
-			println("CREATING REPOSITORY")
-			Repository := ToOcto.RandomString(10)
+			Repository := RandomString(10)
 			Err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
 			if Err != nil {
 				return Err
@@ -178,7 +184,6 @@ func (of *OctoFile) WriteChunk() error {
 			of.path_index++
 			of.chunk_index = 0
 		}
-		println("SETTING AND TRANSFERING")
 		chunked_src := NewSourceLimiter(of.repo_limiter, of.file.ChunkSize)
 		if of.cached_src_chunk != nil {
 			of.cached_src_chunk.Dispose()
@@ -209,11 +214,9 @@ func (of *OctoFile) WriteChunk() error {
 		of.cached_src_chunk.Dispose()
 		of.file.Size += chunked_src.GetCurrentSize()
 		if of.repo_limiter.IsEOF() {
-			println("THE SOURCE DATA IS EMPTY")
 			of.repo_limiter = nil
 			of.src_data = nil
 		} else if chunked_src.IsEOF() {
-			println("THE REPOSITORY IS FULL")
 			of.repo_limiter = nil
 		}
 		of.chunk_index++
@@ -223,6 +226,7 @@ func (of *OctoFile) WriteChunk() error {
 	return nil
 }
 
+// Retries writing the last chunk of data to the file (if any error occurred during the last write)
 func (of *OctoFile) RetryWriteChunk() error {
 	var Err *ToOcto.Error
 	if of.cached_src_chunk != nil {
@@ -243,6 +247,7 @@ func (of *OctoFile) RetryWriteChunk() error {
 	return nil
 }
 
+// Writes all the data to the file (if any error occurred during the last write, need to call RetryWriteChunk()
 func (of *OctoFile) WriteAll() error {
 	for {
 		err := of.WriteChunk()

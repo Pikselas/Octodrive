@@ -9,9 +9,6 @@ import (
 /*
 Reads from source -> Encodes by the encoder and returns.
 */
-type EncodedReader interface {
-	Read(p []byte) (int, error)
-}
 type reader struct {
 	source            io.Reader
 	encoder           io.WriteCloser
@@ -32,11 +29,10 @@ func (r *reader) Read(p []byte) (int, error) {
 }
 
 /*
-	Source: source from data should be retrieved.
-	Encoder: that encodes the data into a special format.
+	Source: source from data should be retrieved and encoded
 */
 
-func NewEncodedReader(Source io.Reader) EncodedReader {
+func NewEncodedReader(Source io.Reader) io.Reader {
 	buffer := bytes.Buffer{}
 	Encoder := base64.NewEncoder(base64.StdEncoding, &buffer)
 	return &reader{Source, Encoder, &buffer, true}

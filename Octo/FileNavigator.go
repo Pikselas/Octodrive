@@ -13,25 +13,18 @@ type ItemType struct {
 	Name  string
 }
 
-type FileNavigator interface {
-	CurrentDirectory() string
-	GotoDirectory(path string) error
-	GotoParentDirectory() error
-	GotoChildDirectory(name string) error
-	GetItemList() []ItemType
-}
-
 var ErrorInvalidPath = errors.New("path not found")
 
-type fileNavigator struct {
-	user              ToOcto.OctoUser
+type FileNavigator struct {
+	user              *ToOcto.OctoUser
 	root              string
 	repository        string
 	current_directory string
 	dir_items         []ItemType
 }
 
-func (f *fileNavigator) checkPath(path string) error {
+// checks if path is valid and sets dir_items
+func (f *FileNavigator) checkPath(path string) error {
 	req, err := f.user.MakeRequest(http.MethodGet, f.repository, f.root+"/"+path, nil, false)
 	if err != nil {
 		return err
@@ -55,11 +48,13 @@ func (f *fileNavigator) checkPath(path string) error {
 	return nil
 }
 
-func (f *fileNavigator) CurrentDirectory() string {
+// returns current directory
+func (f *FileNavigator) CurrentDirectory() string {
 	return f.current_directory
 }
 
-func (f *fileNavigator) GotoDirectory(path string) error {
+// switches current directory to path
+func (f *FileNavigator) GotoDirectory(path string) error {
 	err := f.checkPath(path)
 	if err == nil {
 		f.current_directory = path
@@ -67,7 +62,8 @@ func (f *fileNavigator) GotoDirectory(path string) error {
 	return err
 }
 
-func (f *fileNavigator) GotoParentDirectory() error {
+// switches from current directory to parent directory
+func (f *FileNavigator) GotoParentDirectory() error {
 	p := path.Dir(f.current_directory)
 	err := f.checkPath(p)
 	if err == nil {
@@ -76,7 +72,8 @@ func (f *fileNavigator) GotoParentDirectory() error {
 	return err
 }
 
-func (f *fileNavigator) GotoChildDirectory(name string) error {
+// switches from current directory to given child directory
+func (f *FileNavigator) GotoChildDirectory(name string) error {
 	p := path.Join(f.current_directory, name)
 	err := f.checkPath(p)
 	if err == nil {
@@ -86,12 +83,14 @@ func (f *fileNavigator) GotoChildDirectory(name string) error {
 	return err
 }
 
-func (f *fileNavigator) GetItemList() []ItemType {
+// returns list of items in current directory
+func (f *FileNavigator) GetItemList() []ItemType {
 	return f.dir_items
 }
 
-func NewFileNavigator(User ToOcto.OctoUser, Repository string, Root string) (FileNavigator, error) {
-	f := fileNavigator{user: User, repository: Repository, root: Root, dir_items: make([]ItemType, 0)}
+// creates a new FileNavigator
+func NewFileNavigator(User *ToOcto.OctoUser, Repository string, Root string) (*FileNavigator, error) {
+	f := FileNavigator{user: User, repository: Repository, root: Root, dir_items: make([]ItemType, 0)}
 	err := f.checkPath("")
 	if err != nil {
 		return nil, errors.New("error fetching User/Repository/Root")
