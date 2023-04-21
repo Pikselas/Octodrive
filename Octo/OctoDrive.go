@@ -14,8 +14,8 @@ const (
 )
 
 const (
-	FileChunkSize   = 30015488
-	MaxOctoRepoSize = FileChunkSize * 30
+	FileChunkSize   = 30015488 / 2
+	MaxOctoRepoSize = FileChunkSize * 30 * 2
 )
 
 type OctoDrive interface {
