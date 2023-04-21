@@ -40,7 +40,41 @@ func (of *OctoFile) GetSize() uint64 {
 	return of.file.Size
 }
 
-func (of *OctoFile) Get() (io.ReadCloser, error) {
+type rd_sk_closer struct {
+	current_pos uint64
+	file        *OctoFile
+	read_closer io.ReadCloser
+}
+
+func (rsc *rd_sk_closer) Read(p []byte) (n int, err error) {
+	n, err = rsc.read_closer.Read(p)
+	rsc.current_pos += uint64(n)
+	return
+}
+
+func (rsc *rd_sk_closer) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		rsc.current_pos = uint64(offset)
+	case io.SeekCurrent:
+		rsc.current_pos += uint64(offset)
+	case io.SeekEnd:
+		rsc.current_pos = rsc.file.file.Size - uint64(offset)
+	}
+	read_closer, err := rsc.file.GetBytesReader(rsc.current_pos, rsc.file.file.Size)
+	rsc.read_closer = read_closer
+	return int64(rsc.current_pos), err
+}
+
+func (rsc *rd_sk_closer) Close() error {
+	return rsc.read_closer.Close()
+}
+
+func (of *OctoFile) GetSeekReader() (io.ReadSeekCloser, error) {
+	return &rd_sk_closer{file: of, current_pos: 0}, nil
+}
+
+func (of *OctoFile) GetReader() (io.ReadCloser, error) {
 	Rdrs := make([]io.ReadCloser, 0)
 	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
 	for _, repo := range of.file.Paths {
@@ -56,15 +90,13 @@ func (of *OctoFile) Get() (io.ReadCloser, error) {
 	return &octoFileReader{readers: Rdrs, read_end: true}, nil
 }
 
-func (of *OctoFile) GetBytes(from uint64, to uint64) (io.ReadCloser, error) {
+func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error) {
 	StartPathIndex := from / of.file.MaxRepoSize
 	EndPathIndex := to / of.file.MaxRepoSize
 	StartPartNo := from % of.file.MaxRepoSize / of.file.ChunkSize
 	StartPartOffset := from % of.file.MaxRepoSize % of.file.ChunkSize
 	EndPartNo := to % of.file.MaxRepoSize / of.file.ChunkSize
 	EndPartOffset := to % of.file.MaxRepoSize % of.file.ChunkSize
-
-	fmt.Println(StartPathIndex, EndPathIndex, StartPartNo, StartPartOffset, EndPartNo, EndPartOffset)
 
 	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
 
@@ -205,14 +237,19 @@ func (of *OctoFile) RetryWriteChunk() error {
 		}
 		of.chunk_index++
 	}
-	return Err
+	if Err != nil {
+		return Err
+	}
+	return nil
 }
 
 func (of *OctoFile) WriteAll() error {
 	for {
 		err := of.WriteChunk()
-		println("Writing", err)
 		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 	}
