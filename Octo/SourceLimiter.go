@@ -19,6 +19,9 @@ func (s *sourceLimiter) Read(p []byte) (n int, err error) {
 	if s.currentSize >= s.maxSize {
 		return 0, io.EOF
 	}
+	if s.currentSize+uint64(len(p)) > s.maxSize {
+		p = p[:s.maxSize-s.currentSize]
+	}
 	n, err = s.source.Read(p)
 	s.currentSize += uint64(n)
 	if err == io.EOF {
