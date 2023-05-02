@@ -31,7 +31,22 @@ type OctoFile struct {
 	repo_limiter     SourceLimiter
 	path_index       int
 	chunk_index      int
-	encrypter        EncryptDecrypter
+	enc_dec          EncryptDecrypter
+}
+
+// sets encryption/decryption for the file
+func (of *OctoFile) SetEncDec(enc_dec EncryptDecrypter) {
+	of.enc_dec = enc_dec
+}
+
+// sets optional user data for the file
+func (of *OctoFile) SetUserData(data []byte) {
+	of.file.UserData = data
+}
+
+// returns optional user data for the file
+func (of *OctoFile) GetUserData() []byte {
+	return of.file.UserData
 }
 
 // returns size of the file
@@ -81,13 +96,12 @@ func (of *OctoFile) GetSeekReader() (io.ReadSeekCloser, error) {
 // returns a io.ReadCloser for the file
 func (of *OctoFile) GetReader() (io.ReadCloser, error) {
 	Rdrs := make([]io.ReadCloser, 0)
-	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
 	for _, repo := range of.file.Paths {
 		c, err := getPartCount(of.user, repo, of.file.Name)
 		if err != nil {
 			return nil, err
 		}
-		Rdrs = append(Rdrs, NewMultipartReader(of.user, repo, of.file.Name, int(c), enc_dec))
+		Rdrs = append(Rdrs, NewMultipartReader(of.user, repo, of.file.Name, int(c), of.enc_dec))
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +118,7 @@ func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error
 	EndPartNo := to % of.file.MaxRepoSize / of.file.ChunkSize
 	EndPartOffset := to % of.file.MaxRepoSize % of.file.ChunkSize
 
-	enc_dec := newAesEncDec(of.file.Key[:32], of.file.Key[32:])
+	enc_dec := of.enc_dec
 
 	Rdrs := make([]io.ReadCloser, 0)
 	if StartPathIndex == EndPathIndex && StartPartNo == EndPartNo {
@@ -193,7 +207,7 @@ func (of *OctoFile) WriteChunk() error {
 		if err != nil {
 			return err
 		}
-		source, err := of.encrypter.Encrypt(cached_chunk)
+		source, err := of.enc_dec.Encrypt(cached_chunk)
 		if err != nil {
 			return err
 		}
@@ -231,7 +245,7 @@ func (of *OctoFile) RetryWriteChunk() error {
 	var Err *ToOcto.Error
 	if of.cached_src_chunk != nil {
 		of.cached_src_chunk.Reset()
-		source, err := of.encrypter.Encrypt(of.cached_src_chunk)
+		source, err := of.enc_dec.Encrypt(of.cached_src_chunk)
 		if err != nil {
 			return err
 		}
@@ -247,7 +261,7 @@ func (of *OctoFile) RetryWriteChunk() error {
 	return nil
 }
 
-// Writes all the data to the file (if any error occurred during the last write, need to call RetryWriteChunk()
+// Writes all the data to the file (if any error occurred during the last write, need to call RetryWriteChunk )
 func (of *OctoFile) WriteAll() error {
 	for {
 		err := of.WriteChunk()

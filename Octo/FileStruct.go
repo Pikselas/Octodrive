@@ -6,5 +6,5 @@ type fileDetails struct {
 	Size        uint64
 	ChunkSize   uint64
 	MaxRepoSize uint64
-	Key         []byte
+	UserData    []byte
 }

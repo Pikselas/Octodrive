@@ -7,17 +7,25 @@ import (
 	"io"
 )
 
-type EncryptDecrypter interface {
+type Encrypter interface {
 	Encrypt(io.Reader) (io.Reader, error)
+}
+
+type Decrypter interface {
 	Decrypt(io.Reader) (io.Reader, error)
 }
 
-type aesEncDec struct {
+type EncryptDecrypter interface {
+	Encrypter
+	Decrypter
+}
+
+type AesEncDec struct {
 	key []byte
 	iv  []byte
 }
 
-func (aesED *aesEncDec) baseAesFunc(data io.Reader) (io.Reader, error) {
+func (aesED *AesEncDec) baseAesFunc(data io.Reader) (io.Reader, error) {
 	// Create a new AES cipher block using the key
 	block, err := aes.NewCipher(aesED.key)
 	if err != nil {
@@ -33,19 +41,35 @@ func (aesED *aesEncDec) baseAesFunc(data io.Reader) (io.Reader, error) {
 	return encryptedReader, nil
 }
 
-func (aesED *aesEncDec) Encrypt(data io.Reader) (io.Reader, error) {
+func (aesED *AesEncDec) Encrypt(data io.Reader) (io.Reader, error) {
 	return aesED.baseAesFunc(data)
 }
 
-func (aesED *aesEncDec) Decrypt(data io.Reader) (io.Reader, error) {
+func (aesED *AesEncDec) Decrypt(data io.Reader) (io.Reader, error) {
 	return aesED.baseAesFunc(data)
 }
 
-func newAesEncDec(key []byte, iv []byte) EncryptDecrypter {
-	return &aesEncDec{key: key, iv: iv}
+func (aesED *AesEncDec) GetKey() []byte {
+	return append(aesED.key, aesED.iv...)
 }
 
-func generateKey(len uint) ([]byte, error) {
+func NewAesEncDecFrom(key []byte) EncryptDecrypter {
+	return &AesEncDec{key: key[:32], iv: key[32:48]}
+}
+
+func NewAesEncDec() (*AesEncDec, error) {
+	key, err := GenerateKey(32)
+	if err != nil {
+		return nil, err
+	}
+	iv, err := GenerateKey(16)
+	if err != nil {
+		return nil, err
+	}
+	return &AesEncDec{key: key, iv: iv}, nil
+}
+
+func GenerateKey(len uint) ([]byte, error) {
 	key := make([]byte, len)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, err

@@ -33,17 +33,6 @@ func (drive *OctoDrive) Create(src io.Reader) (*OctoFile, error) {
 	file.path_index = -1
 	file.src_data = src
 	file.user = drive.user
-
-	fileKey, err := generateKey(32)
-	if err != nil {
-		return nil, err
-	}
-	fileIV, err := generateKey(16)
-	if err != nil {
-		return nil, err
-	}
-	file.encrypter = newAesEncDec(fileKey, fileIV)
-	file.file.Key = append(fileKey, fileIV...)
 	return file, nil
 }
 
@@ -69,7 +58,7 @@ func (drive *OctoDrive) Load(path string) (*OctoFile, error) {
 
 // Saves a file to path
 func (drive *OctoDrive) Save(path string, of *OctoFile) error {
-	data, err := json.Marshal(of.file)
+	data, err := json.MarshalIndent(of.file, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -82,7 +71,7 @@ func (drive *OctoDrive) Save(path string, of *OctoFile) error {
 
 // Updates a file at path
 func (dive *OctoDrive) Update(path string, of *OctoFile) error {
-	data, err := json.Marshal(of.file)
+	data, err := json.MarshalIndent(of.file, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -122,7 +111,6 @@ func EnableFileWrite(file *OctoFile, src io.Reader) error {
 		return errors.New("invalid file")
 	}
 	file.path_index = len(file.file.Paths) - 1
-	file.encrypter = newAesEncDec(file.file.Key[:32], file.file.Key[32:])
 	file.src_data = src
 	part_count, err := getPartCount(file.user, file.file.Paths[file.path_index], file.file.Name)
 	if err != nil {

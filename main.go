@@ -74,9 +74,15 @@ func MakeFileServer(drive *Octo.OctoDrive) {
 	for _, file := range files {
 		if !file.IsDir {
 			of, err := drive.Load(file.Name)
+			b := of.GetUserData()
+			if b == nil {
+				panic("No user data")
+			}
 			if err != nil {
 				panic(err)
 			}
+			enc_dec := Octo.NewAesEncDecFrom(b)
+			of.SetEncDec(enc_dec)
 			fmt.Println("Serving", file.Name)
 			http.HandleFunc("/"+file.Name, StreamFile(of, "application/octet-stream"))
 		}

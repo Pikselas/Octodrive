@@ -8,10 +8,6 @@ import (
 	"strconv"
 )
 
-type Decrypter interface {
-	Decrypt(io.Reader) (io.Reader, error)
-}
-
 type OctoMultiPartReader interface {
 	GetReadCount() uint64
 	Read(p []byte) (n int, err error)
