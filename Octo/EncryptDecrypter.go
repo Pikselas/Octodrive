@@ -76,3 +76,23 @@ func GenerateKey(len uint) ([]byte, error) {
 	}
 	return key, nil
 }
+
+/*
+ * Nil Encrypt Decrypter
+   A dummy encrypt decrypter that does nothing
+*/
+
+type nilEncDec struct{}
+
+func (ned *nilEncDec) Encrypt(data io.Reader) (io.Reader, error) {
+	return data, nil
+}
+
+func (ned *nilEncDec) Decrypt(data io.Reader) (io.Reader, error) {
+	return data, nil
+}
+
+// A dummy encrypt decrypter that does nothing
+func NewNilEncDec() EncryptDecrypter {
+	return &nilEncDec{}
+}

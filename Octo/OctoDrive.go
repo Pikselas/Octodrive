@@ -24,7 +24,7 @@ type OctoDrive struct {
 }
 
 // Creates a new file
-func (drive *OctoDrive) Create(src io.Reader) (*OctoFile, error) {
+func (drive *OctoDrive) Create(src io.Reader) *OctoFile {
 	file := new(OctoFile)
 	file.file.Name = RandomString(10)
 	file.file.ChunkSize = FileChunkSize
@@ -33,7 +33,8 @@ func (drive *OctoDrive) Create(src io.Reader) (*OctoFile, error) {
 	file.path_index = -1
 	file.src_data = src
 	file.user = drive.user
-	return file, nil
+	file.enc_dec = NewNilEncDec()
+	return file
 }
 
 // Loads a file from path
@@ -53,6 +54,7 @@ func (drive *OctoDrive) Load(path string) (*OctoFile, error) {
 	Of := new(OctoFile)
 	Of.file = FileDetails
 	Of.user = drive.user
+	Of.enc_dec = NewNilEncDec()
 	return Of, nil
 }
 
