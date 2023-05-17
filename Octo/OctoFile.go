@@ -186,7 +186,6 @@ func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error
 // Writes a chunk of data to the file
 func (of *OctoFile) WriteChunk() error {
 	if of.src_data != nil {
-		println("VALID SOURCE")
 		if of.repo_limiter == nil {
 			Repository := RandomString(10)
 			Err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
@@ -216,11 +215,9 @@ func (of *OctoFile) WriteChunk() error {
 			io.Copy(io.Discard, cached_chunk)
 			of.file.Size += chunked_src.GetCurrentSize()
 			if of.repo_limiter.IsEOF() {
-				println("THE SOURCE DATA IS EMPTY")
 				of.repo_limiter = nil
 				of.src_data = nil
 			} else if chunked_src.IsEOF() {
-				println("THE REPOSITORY IS FULL")
 				of.repo_limiter = nil
 			}
 			return Err
