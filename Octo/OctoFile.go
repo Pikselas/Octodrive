@@ -71,6 +71,7 @@ func (rsc *rd_sk_closer) Read(p []byte) (n int, err error) {
 // whence can be io.SeekStart, io.SeekCurrent, io.SeekEnd
 // returns the new position and error
 func (rsc *rd_sk_closer) Seek(offset int64, whence int) (int64, error) {
+	rsc.read_closer.Close()
 	switch whence {
 	case io.SeekStart:
 		rsc.current_pos = uint64(offset)
@@ -90,7 +91,11 @@ func (rsc *rd_sk_closer) Close() error {
 
 // returns a io.ReadSeekCloser for the file
 func (of *OctoFile) GetSeekReader() (io.ReadSeekCloser, error) {
-	return &rd_sk_closer{file: of, current_pos: 0}, nil
+	rdr, err := of.GetBytesReader(0, of.file.Size)
+	if err != nil {
+		return nil, err
+	}
+	return &rd_sk_closer{0, of, rdr}, nil
 }
 
 // returns a io.ReadCloser for the file
