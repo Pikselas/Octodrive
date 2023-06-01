@@ -1,11 +1,12 @@
 package Octo
 
 import (
-	"Octo/Octo/ToOcto"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
 
 // closes a SourceLimiter

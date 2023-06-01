@@ -134,8 +134,22 @@ func (u *OctoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) 
 }
 
 // Creates a new user with the given name, email and token.
-func NewOctoUser(name string, email string, token string) *OctoUser {
+func NewOctoUser(name string, email string, token string) (*OctoUser, *Error) {
+	http_client := &http.Client{}
+	//check if the token is valid
+	rq, err := http.NewRequest(http.MethodGet, "https://api.github.com/user", nil)
+	if err != nil {
+		return nil, NewError(ErrorUnknown, 0, nil, err)
+	}
+	rq.Header.Add("Authorization", "bearer "+token)
+	res, err := http_client.Do(rq)
+	if err != nil {
+		return nil, NewError(ErrorUnknown, 0, nil, err)
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, NewError(ErrorUnknown, res.StatusCode, res.Body, nil)
+	}
 	user := new(OctoUser)
-	*user = OctoUser{name: name, email: email, token: token, client: &http.Client{}}
-	return user
+	*user = OctoUser{name: name, email: email, token: token, client: http_client}
+	return user, nil
 }

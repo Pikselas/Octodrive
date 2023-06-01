@@ -1,11 +1,12 @@
 package Octo
 
 import (
-	"Octo/Octo/ToOcto"
 	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
 
 type OctoMultiPartReader interface {

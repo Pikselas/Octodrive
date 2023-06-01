@@ -1,11 +1,12 @@
 package Octo
 
 import (
-	"Octo/Octo/ToOcto"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"path"
+
+	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
 
 type ItemType struct {

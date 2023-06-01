@@ -1,12 +1,13 @@
 package Octo
 
 import (
-	"Octo/Octo/ToOcto"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+
+	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
 
 const (
@@ -90,14 +91,13 @@ func (drive *OctoDrive) NewFileNavigator() (*FileNavigator, error) {
 }
 
 // Creates a new OctoDrive
-func NewOctoDrive(User string, Mail string, Token string) (*OctoDrive, error) {
-	oU := ToOcto.NewOctoUser(User, Mail, Token)
+func NewOctoDrive(user *ToOcto.OctoUser) (*OctoDrive, error) {
 	od := new(OctoDrive)
-	*od = OctoDrive{user: oU}
-	err := oU.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
+	*od = OctoDrive{user: user}
+	err := user.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
 	if err != nil {
 		stat := err.StatusCode()
-		if stat != http.StatusCreated && stat != http.StatusUnprocessableEntity {
+		if stat != http.StatusUnprocessableEntity {
 			return nil, err
 		}
 	}
