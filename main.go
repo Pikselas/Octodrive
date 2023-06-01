@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/Pikselas/Octodrive/Octo"
-	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
 
 func PrintIP() {
@@ -162,17 +161,4 @@ func UploadFile(name, path string, drive *Octo.OctoDrive) {
 	close(ch)
 	err = drive.Save(name, f)
 	check(err)
-}
-func main() {
-	octoUser, err := ToOcto.NewOctoUser(
-		"Pikselas",
-		"",
-		"")
-
-	if err != nil {
-		panic(err)
-	}
-	drive, err2 := Octo.NewOctoDrive(octoUser)
-	check(err2)
-	MakeFileServer(drive)
 }
