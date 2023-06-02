@@ -11,17 +11,18 @@ import (
 )
 
 const (
-	OctoFileRegistry = "_Octofiles"
-)
-
-const (
 	FileChunkSize   = 30015488 / 2
 	MaxOctoRepoSize = FileChunkSize * 30 * 2
 )
 
+const (
+	DefaultFileRegistry = "_Octofiles"
+)
+
 // OctoDrive stores files to GitHub
 type OctoDrive struct {
-	user *ToOcto.OctoUser
+	user          *ToOcto.OctoUser
+	file_registry string
 }
 
 // Creates a new file
@@ -41,7 +42,7 @@ func (drive *OctoDrive) Create(src io.Reader) *OctoFile {
 // Loads a file from path
 func (drive *OctoDrive) Load(path string) (*OctoFile, error) {
 	//get file details
-	req, err := drive.user.MakeRequest(http.MethodGet, OctoFileRegistry, "Contents/"+path, nil, true)
+	req, err := drive.user.MakeRequest(http.MethodGet, drive.file_registry, "Contents/"+path, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (drive *OctoDrive) Save(path string, of *OctoFile) error {
 	if err != nil {
 		return err
 	}
-	Err := drive.user.Transfer(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(data))
+	Err := drive.user.Transfer(drive.file_registry, "Contents/"+path, bytes.NewBuffer(data))
 	if Err != nil {
 		return Err
 	}
@@ -78,7 +79,7 @@ func (dive *OctoDrive) Update(path string, of *OctoFile) error {
 	if err != nil {
 		return err
 	}
-	Err := dive.user.Update(OctoFileRegistry, "Contents/"+path, bytes.NewBuffer(data))
+	Err := dive.user.Update(dive.file_registry, "Contents/"+path, bytes.NewBuffer(data))
 	if Err != nil {
 		return Err
 	}
@@ -87,14 +88,14 @@ func (dive *OctoDrive) Update(path string, of *OctoFile) error {
 
 // Creates a new file navigator
 func (drive *OctoDrive) NewFileNavigator() (*FileNavigator, error) {
-	return NewFileNavigator(drive.user, OctoFileRegistry, "Contents")
+	return NewFileNavigator(drive.user, drive.file_registry, "Contents")
 }
 
 // Creates a new OctoDrive
-func NewOctoDrive(user *ToOcto.OctoUser) (*OctoDrive, error) {
+func NewOctoDrive(user *ToOcto.OctoUser, base_repository string) (*OctoDrive, error) {
 	od := new(OctoDrive)
-	*od = OctoDrive{user: user}
-	err := user.CreateRepository(OctoFileRegistry, "Initial repo for OctoDrive contents")
+	*od = OctoDrive{user: user, file_registry: base_repository}
+	err := user.CreateRepository(base_repository, "Initial repo for OctoDrive contents")
 	if err != nil {
 		stat := err.StatusCode()
 		if stat != http.StatusUnprocessableEntity {
