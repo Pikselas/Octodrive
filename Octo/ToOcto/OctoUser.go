@@ -2,11 +2,11 @@ package ToOcto
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 /*
@@ -47,7 +47,7 @@ func (u *OctoUser) CreateRepository(name string, description string) *Error {
 		return NewError(ErrorCreatingRepository, 0, nil, err)
 	}
 	rq.Header.Add("Authorization", "token "+u.token)
-	res, err := http.DefaultClient.Do(rq)
+	res, err := u.client.Do(rq)
 	if err != nil {
 		return NewError(ErrorCreatingRepository, 0, nil, err)
 	}
@@ -86,17 +86,16 @@ func (u *OctoUser) Transfer(repo string, path string, body io.Reader) *Error {
 }
 
 // Updates the file in the given repository.
-// Updating File is expensive , Should only be done for small files
 func (u *OctoUser) Update(repo string, path string, data io.Reader) *Error {
 	target := getOctoURL(u.name, repo, path)
 	//get the sha of the file
-	req, err := http.NewRequest(http.MethodGet, target, nil)
+	req, err := http.NewRequest(http.MethodHead, target, nil)
 	if err != nil {
 		return NewError(ErrorUpdating, 0, nil, err)
 	}
 	req.Header.Add("Accept", "application/vnd.github+json")
 	req.Header.Add("Authorization", "Bearer "+u.token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := u.client.Do(req)
 	if err != nil {
 		return NewError(ErrorUpdating, 0, nil, err)
 	}
@@ -104,15 +103,9 @@ func (u *OctoUser) Update(repo string, path string, data io.Reader) *Error {
 	if resp.StatusCode != http.StatusOK {
 		return NewError(ErrorUpdating, resp.StatusCode, resp.Body, nil)
 	}
-	var JsonData map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&JsonData)
-	if err != nil {
-		return NewError(ErrorUpdating, 0, nil, err)
-	}
-	sha, ok := JsonData["sha"]
-	if ok {
-		SHA := sha.(string)
-		return u.transfer(target, data, &SHA)
+	sha := strings.Trim(resp.Header.Get("ETag"), "\"")
+	if sha != "" {
+		return u.transfer(target, data, &sha)
 	}
 	return NewError(ErrorUpdating, 0, nil, errors.New("SHA not found"))
 }
