@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/Pikselas/Octodrive/Octo/ToOcto"
 )
@@ -119,8 +120,43 @@ func EnableFileWrite(file *OctoFile, src io.Reader) error {
 	if err != nil {
 		return err
 	}
+
+	// compare size to file chunk size
+	// if size is less than file chunk size,
+	// then update the last chunk with the new data
+
+	req, err := file.user.MakeRequest(http.MethodGet, file.file.Paths[file.path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), nil, true)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if uint64(res.ContentLength) < file.file.ChunkSize {
+
+		// update last chunk with chunk data + src data
+
+		chunk_reader := NewSourceLimiter(io.MultiReader(res.Body, src), file.file.ChunkSize)
+		octo_err := file.user.Update(file.file.Paths[file.path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), chunk_reader)
+		if octo_err != nil {
+			return octo_err
+		}
+		file.file.Size += uint64(chunk_reader.GetCurrentSize())
+		if chunk_reader.GetCurrentSize() < file.file.ChunkSize {
+			file.src_data = nil
+			return nil
+		}
+	}
+
+	// check repository size if repository
+	// size is less than max repository size,
+	// next chunks will be created here until max
+	// repository size is reached
+
 	repo_size := uint64(part_count) * file.file.ChunkSize
-	if repo_size < file.file.MaxRepoSize {
+	if file.file.MaxRepoSize > repo_size {
 		file.chunk_index = int(part_count)
 		file.repo_limiter = NewSourceLimiter(file.src_data, file.file.MaxRepoSize-repo_size)
 	}
