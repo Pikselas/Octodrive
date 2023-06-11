@@ -137,8 +137,15 @@ func EnableFileWrite(file *OctoFile, src io.Reader) error {
 	if uint64(res.ContentLength) < file.file.ChunkSize {
 
 		// update last chunk with chunk data + src data
-
-		chunk_reader := NewSourceLimiter(io.MultiReader(res.Body, src), file.file.ChunkSize)
+		decrypted_r, err := file.enc_dec.Decrypt(res.Body)
+		if err != nil {
+			return err
+		}
+		encrypted_r, err := file.enc_dec.Encrypt(io.MultiReader(decrypted_r, src))
+		if err != nil {
+			return err
+		}
+		chunk_reader := NewSourceLimiter(encrypted_r, file.file.ChunkSize)
 		octo_err := file.user.Update(file.file.Paths[file.path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), chunk_reader)
 		if octo_err != nil {
 			return octo_err
