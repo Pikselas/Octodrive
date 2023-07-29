@@ -61,9 +61,13 @@ func (drive *OctoDrive) Load(path string) (*OctoFile, error) {
 	return Of, nil
 }
 
+func GetFileData(of *OctoFile) ([]byte, error) {
+	return json.MarshalIndent(of.file, "", "  ")
+}
+
 // Saves a file to path
 func (drive *OctoDrive) Save(path string, of *OctoFile) error {
-	data, err := json.MarshalIndent(of.file, "", "  ")
+	data, err := GetFileData(of)
 	if err != nil {
 		return err
 	}

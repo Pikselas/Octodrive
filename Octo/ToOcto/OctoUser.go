@@ -2,6 +2,7 @@ package ToOcto
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 )
 
 /*
- Interface that wraps the basic methods of a user.
+	basic octo user.
 */
 
 type OctoUser struct {
@@ -127,7 +128,7 @@ func (u *OctoUser) GetContent(repo string, path string) (io.ReadCloser, *Error) 
 }
 
 // Creates a new user with the given name, email and token.
-func NewOctoUser(name string, email string, token string) (*OctoUser, *Error) {
+func NewOctoUser(email, token string) (*OctoUser, *Error) {
 	http_client := &http.Client{}
 	//check if the token is valid
 	rq, err := http.NewRequest(http.MethodGet, "https://api.github.com/user", nil)
@@ -143,6 +144,11 @@ func NewOctoUser(name string, email string, token string) (*OctoUser, *Error) {
 		return nil, NewError(ErrorUnknown, res.StatusCode, res.Body, nil)
 	}
 	user := new(OctoUser)
+
+	//get the name and email
+	res_data := make(map[string]interface{})
+	json.NewDecoder(res.Body).Decode(&res_data)
+	name := res_data["login"].(string)
 	*user = OctoUser{name: name, email: email, token: token, client: http_client}
 	return user, nil
 }
