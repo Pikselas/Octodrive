@@ -25,14 +25,15 @@ func (lc *LimiterCloser) Close() error {
 
 // Represents a file in OctoDrive
 type OctoFile struct {
-	file             fileDetails
-	user             *ToOcto.OctoUser
-	src_data         io.Reader
-	cached_src_chunk *CachedReader
-	repo_limiter     SourceLimiter
-	path_index       int
-	chunk_index      int
-	enc_dec          EncryptDecrypter
+	file    fileDetails
+	user    *ToOcto.OctoUser
+	enc_dec EncryptDecrypter
+}
+
+type OctoFileWriteData struct {
+	chunk_index  int
+	src_data     io.Reader
+	repo_limiter SourceLimiter
 }
 
 // sets encryption/decryption for the file
@@ -190,84 +191,52 @@ func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error
 }
 
 // Writes a chunk of data to the file
-func (of *OctoFile) WriteChunk() error {
-	if of.src_data != nil {
-		if of.repo_limiter == nil {
+func (of *OctoFile) WriteChunk(write_data *OctoFileWriteData) error {
+	if write_data.src_data != nil {
+		if write_data.repo_limiter == nil {
 			Repository := RandomString(10)
 			Err := of.user.CreateRepository(Repository, "OCTODRIVE_CONTENTS")
 			if Err != nil {
 				return Err
 			}
-			of.repo_limiter = NewSourceLimiter(of.src_data, of.file.MaxRepoSize)
+			write_data.repo_limiter = NewSourceLimiter(write_data.src_data, of.file.MaxRepoSize)
 			of.file.Paths = append(of.file.Paths, Repository)
-			of.path_index++
-			of.chunk_index = 0
+			//write_data.path_index++
+			write_data.chunk_index = 0
 		}
-		chunked_src := NewSourceLimiter(of.repo_limiter, of.file.ChunkSize)
-		if of.cached_src_chunk != nil {
-			of.cached_src_chunk.Dispose()
-		}
-		cached_chunk, err := NewCachedReader(chunked_src)
-		of.cached_src_chunk = cached_chunk
+		chunked_src := NewSourceLimiter(write_data.repo_limiter, of.file.ChunkSize)
+		source, err := of.enc_dec.Encrypt(chunked_src)
 		if err != nil {
 			return err
 		}
-		source, err := of.enc_dec.Encrypt(cached_chunk)
-		if err != nil {
-			return err
-		}
-		Err := of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
+		Err := of.user.Transfer(of.file.Paths[len(of.file.Paths)-1], of.file.Name+"/"+strconv.Itoa(write_data.chunk_index), source)
 		if Err != nil {
-			io.Copy(io.Discard, cached_chunk)
-			of.file.Size += chunked_src.GetCurrentSize()
-			if of.repo_limiter.IsEOF() {
-				of.repo_limiter = nil
-				of.src_data = nil
+			if write_data.repo_limiter.IsEOF() {
+				write_data.repo_limiter = nil
+				write_data.src_data = nil
 			} else if chunked_src.IsEOF() {
-				of.repo_limiter = nil
+				write_data.repo_limiter = nil
 			}
 			return Err
 		}
-		of.cached_src_chunk.Dispose()
 		of.file.Size += chunked_src.GetCurrentSize()
-		if of.repo_limiter.IsEOF() {
-			of.repo_limiter = nil
-			of.src_data = nil
+		if write_data.repo_limiter.IsEOF() {
+			write_data.repo_limiter = nil
+			write_data.src_data = nil
 		} else if chunked_src.IsEOF() {
-			of.repo_limiter = nil
+			write_data.repo_limiter = nil
 		}
-		of.chunk_index++
+		write_data.chunk_index++
 	} else {
 		return io.EOF
 	}
 	return nil
 }
 
-// Retries writing the last chunk of data to the file (if any error occurred during the last write)
-func (of *OctoFile) RetryWriteChunk() error {
-	var Err *ToOcto.Error
-	if of.cached_src_chunk != nil {
-		of.cached_src_chunk.Reset()
-		source, err := of.enc_dec.Encrypt(of.cached_src_chunk)
-		if err != nil {
-			return err
-		}
-		Err = of.user.Transfer(of.file.Paths[of.path_index], of.file.Name+"/"+strconv.Itoa(of.chunk_index), source)
-		if Err != nil {
-			return Err
-		}
-		of.chunk_index++
-	}
-	if Err != nil {
-		return Err
-	}
-	return nil
-}
-
-// Writes all the data to the file (if any error occurred during the last write, need to call RetryWriteChunk )
-func (of *OctoFile) WriteAll() error {
+// Writes all the data to the file
+func (of *OctoFile) WriteAll(file_write_data *OctoFileWriteData) error {
 	for {
-		err := of.WriteChunk()
+		err := of.WriteChunk(file_write_data)
 		if err != nil {
 			if err == io.EOF {
 				return nil

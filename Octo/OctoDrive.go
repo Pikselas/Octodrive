@@ -27,14 +27,12 @@ type OctoDrive struct {
 }
 
 // Creates a new file
-func (drive *OctoDrive) Create(src io.Reader) *OctoFile {
+func (drive *OctoDrive) Create() *OctoFile {
 	file := new(OctoFile)
 	file.file.Name = RandomString(10)
 	file.file.ChunkSize = FileChunkSize
 	file.file.MaxRepoSize = MaxOctoRepoSize
 	file.file.Paths = make([]string, 0)
-	file.path_index = -1
-	file.src_data = src
 	file.user = drive.user
 	file.enc_dec = NewNilEncDec()
 	return file
@@ -111,65 +109,68 @@ func NewOctoDrive(user *ToOcto.OctoUser, base_repository string) (*OctoDrive, er
 }
 
 // Enables a loaded file for writing
-func EnableFileWrite(file *OctoFile, src io.Reader) error {
+func InitializeFileWrite(file *OctoFile, src io.Reader) (*OctoFileWriteData, error) {
 	if file == nil {
-		return errors.New("file is nil")
+		return nil, errors.New("file is nil")
 	}
 	if file.file.Paths == nil {
-		return errors.New("invalid file")
+		return nil, errors.New("invalid file")
 	}
-	file.path_index = len(file.file.Paths) - 1
-	file.src_data = src
-	part_count, err := getPartCount(file.user, file.file.Paths[file.path_index], file.file.Name)
-	if err != nil {
-		return err
-	}
+	path_index := len(file.file.Paths) - 1
 
-	// compare size to file chunk size
-	// if size is less than file chunk size,
-	// then update the last chunk with the new data
-
-	req, err := file.user.MakeRequest(http.MethodGet, file.file.Paths[file.path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), nil, true)
-	if err != nil {
-		return err
-	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if uint64(res.ContentLength) < file.file.ChunkSize {
-
-		// update last chunk with chunk data + src data
-		decrypted_r, err := file.enc_dec.Decrypt(res.Body)
+	file_write_data := new(OctoFileWriteData)
+	file_write_data.src_data = src
+	if path_index >= 0 {
+		part_count, err := getPartCount(file.user, file.file.Paths[path_index], file.file.Name)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		encrypted_r, err := file.enc_dec.Encrypt(io.MultiReader(decrypted_r, src))
+
+		// compare size to file chunk size
+		// if size is less than file chunk size,
+		// then update the last chunk with the new data
+
+		req, err := file.user.MakeRequest(http.MethodGet, file.file.Paths[path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), nil, true)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		chunk_reader := NewSourceLimiter(encrypted_r, file.file.ChunkSize)
-		octo_err := file.user.Update(file.file.Paths[file.path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), chunk_reader)
-		if octo_err != nil {
-			return octo_err
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
 		}
-		file.file.Size += uint64(chunk_reader.GetCurrentSize())
-		if chunk_reader.GetCurrentSize() < file.file.ChunkSize {
-			file.src_data = nil
-			return nil
+		defer res.Body.Close()
+		if uint64(res.ContentLength) < file.file.ChunkSize {
+
+			// update last chunk with chunk data + src data
+			decrypted_r, err := file.enc_dec.Decrypt(res.Body)
+			if err != nil {
+				return nil, err
+			}
+			encrypted_r, err := file.enc_dec.Encrypt(io.MultiReader(decrypted_r, src))
+			if err != nil {
+				return nil, err
+			}
+			chunk_reader := NewSourceLimiter(encrypted_r, file.file.ChunkSize)
+			octo_err := file.user.Update(file.file.Paths[path_index], file.file.Name+"/"+strconv.Itoa(int(part_count-1)), chunk_reader)
+			if octo_err != nil {
+				return nil, octo_err
+			}
+			file.file.Size += uint64(chunk_reader.GetCurrentSize())
+			// if chunk_reader.GetCurrentSize() < file.file.ChunkSize {
+			// 	return file_write_data, nil
+			// }
+		}
+
+		// check repository size if repository
+		// size is less than max repository size,
+		// next chunks will be created here until max
+		// repository size is reached
+
+		repo_size := uint64(part_count) * file.file.ChunkSize
+		if file.file.MaxRepoSize > repo_size {
+			file_write_data.chunk_index = int(part_count)
+			file_write_data.repo_limiter = NewSourceLimiter(file_write_data.src_data, file.file.MaxRepoSize-repo_size)
 		}
 	}
-
-	// check repository size if repository
-	// size is less than max repository size,
-	// next chunks will be created here until max
-	// repository size is reached
-
-	repo_size := uint64(part_count) * file.file.ChunkSize
-	if file.file.MaxRepoSize > repo_size {
-		file.chunk_index = int(part_count)
-		file.repo_limiter = NewSourceLimiter(file.src_data, file.file.MaxRepoSize-repo_size)
-	}
-	return nil
+	return file_write_data, nil
 }
