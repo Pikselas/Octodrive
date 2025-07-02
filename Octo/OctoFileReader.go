@@ -79,6 +79,25 @@ func (r *remoteReader) Close() error {
 	return nil
 }
 
+type selfClosingReader struct {
+	src        io.Reader
+	src_closer io.Closer
+}
+
+func (r *selfClosingReader) Read(p []byte) (int, error) {
+	if r.src == nil {
+		return 0, io.EOF
+	}
+	n, err := r.src.Read(p)
+	if err == io.EOF {
+		if r.src_closer != nil {
+			r.src_closer.Close()
+		}
+		r.src = nil
+	}
+	return n, err
+}
+
 // reads data from the array of readers (octofile chunks)
 type octoFileReader struct {
 	readers            []io.ReadCloser
@@ -96,6 +115,10 @@ func (r *octoFileReader) Read(p []byte) (n int, err error) {
 			r.readers[r.current_read_index].Close()
 			r.read_end = true
 			r.current_read_index++
+			if n == 0 {
+				// try to read from the next reader
+				return r.Read(p)
+			}
 		} else if err != nil {
 			return n, err
 		}
@@ -110,4 +133,12 @@ func (r *octoFileReader) Close() error {
 		r.current_read_index = uint(len(r.readers))
 	}
 	return nil
+}
+
+func NewCombinedSelfClosingReader(readers ...io.ReadCloser) io.ReadCloser {
+	rdrs := make([]io.Reader, len(readers))
+	for i, r := range readers {
+		rdrs[i] = &selfClosingReader{src: r, src_closer: r}
+	}
+	return io.NopCloser(io.MultiReader(rdrs...))
 }

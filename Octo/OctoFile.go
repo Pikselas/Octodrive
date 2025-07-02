@@ -113,7 +113,7 @@ func (of *OctoFile) GetReader() (io.ReadCloser, error) {
 			return nil, err
 		}
 	}
-	return &octoFileReader{readers: Rdrs, read_end: true}, nil
+	return NewCombinedSelfClosingReader(Rdrs...), nil
 }
 
 // returns a io.ReadCloser for the file from the specified position to the specified end position
@@ -184,10 +184,7 @@ func (of *OctoFile) GetBytesReader(from uint64, to uint64) (io.ReadCloser, error
 		remote_reader := &remoteReader{req: req, decrypter: enc_dec}
 		Rdrs = append(Rdrs, &LimiterCloser{limiter: io.LimitReader(remote_reader, int64(EndPartOffset)), closer: remote_reader})
 	}
-	return &octoFileReader{
-		readers:  Rdrs,
-		read_end: true,
-	}, nil
+	return NewCombinedSelfClosingReader(Rdrs...), nil
 }
 
 // Writes a chunk of data to the file
