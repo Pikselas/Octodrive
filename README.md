@@ -1,7 +1,5 @@
 # Octodrive
-Beloved Octocat as Personal backup storage ??
-
-```go
+ ```go
 // create user
 octoUser, octo_err := ToOcto.NewOctoUser(
   "[[ YOUR EMAIL HERE]]",
